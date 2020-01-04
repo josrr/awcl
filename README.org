@@ -1,0 +1,9 @@
+#+TITLE: awcl
+#+AUTHOR: _J. M. R. R._
+
+Another world/Out of this world virtual machine interpreter.
+
+* License
+
+GPLv3
+
