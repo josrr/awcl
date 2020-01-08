@@ -48,10 +48,6 @@
             (mem-entry-state video-1-entry) +mem-entry-state-load-me+)
       (when (/= video-2-idx +memlist-part-none+)
         (setf (mem-entry-state (aref memlist video-2-idx)) +mem-entry-state-load-me+))
-      (memlist-load memlist)
-      (list :bytecode nil
-            :palettes nil
-            :polygon-animations nil
-            :polygon-cinematic nil))))
+      (memlist-load memlist))))
 
 ;;;;
