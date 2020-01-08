@@ -27,8 +27,8 @@
    (unk-c
     :accessor mem-entry-unk-c
     :binary-type binary-types:u16)
-   (packet-size
-    :accessor mem-entry-packet-size
+   (packed-size
+    :accessor mem-entry-packed-size
     :binary-type binary-types:u16)
    (unk-10
     :accessor mem-entry-unk-10
@@ -68,7 +68,7 @@
             (mem-entry-res-type object))))
 
 (defun mem-entry-packetp (entry)
-  (/= (mem-entry-size entry) (mem-entry-packet-size entry)))
+  (/= (mem-entry-size entry) (mem-entry-packed-size entry)))
 
 (defun memlist-create (path)
   ;;(declare (optimize (speed 3)))
@@ -92,23 +92,42 @@
         (format *debug-io* "~A~%" e)
         nil))))
 
-(defun mem-entry-load (entry &key (pattern "Bank") (path #P"./data/Another_World/"))
-  ;unless (mem-entry-packetp entry)
-  (with-slots (bank-id bank-offset size) entry
-    (let ((buffer (make-array size :element-type '(unsigned-byte 8) :initial-element 0)))
-      (handler-case
-          (progn
-            (binary-types:with-binary-file (si (merge-pathnames path
-                                                                (format nil "~A~2,'0X" pattern bank-id)))
-              (file-position si bank-offset)
-              (read-sequence buffer si))
-            buffer)
-        (file-error (e)
-          (format *debug-io* "~A~%" e)
-          nil)
-        (error (e)
-          (format *debug-io* "~A~%" e)
-          nil)))))
+(defun mem-entry-unpack (entry-bytes)
+  entry-bytes)
+
+(defparameter *bank-file-pattern* "BANK")
+(defparameter *bank-file-path* #P"./data/aw01/")
+
+(defun mem-entry-load (entry &key (pattern *bank-file-pattern*)
+                               (path *bank-file-path*))
+  (labels ((bank-file (bank-id)
+             (let ((f1 (merge-pathnames path (format nil "~A~2,'0X" pattern bank-id)))
+                   (f2 (merge-pathnames path (format nil "~A~2,'0x" pattern bank-id))))
+               (if (probe-file f1)
+                   f1
+                   (when (probe-file f2) f2))))
+           (read-entry (bank-id bank-offset size)
+             (let* ((bank-file (bank-file bank-id))
+                    (buffer (and bank-file
+                                 (make-array size :element-type '(unsigned-byte 8)
+                                                  :initial-element 0))))
+               (when buffer
+                 (handler-case
+                     (binary-types:with-binary-file
+                         (si (merge-pathnames path (format nil "~A~2,'0X" pattern bank-id)))
+                       (file-position si bank-offset)
+                       (read-sequence buffer si)
+                       buffer)
+                   (file-error (e)
+                     (format *debug-io* "~A~%" e)
+                     nil)
+                   (error (e)
+                     (format *debug-io* "~A~%" e)
+                     nil))))))
+    (with-slots (bank-id bank-offset size packed-size) entry
+      (if (mem-entry-packetp entry)
+          (mem-entry-unpack (read-entry bank-id bank-offset packed-size))
+          (read-entry bank-id bank-offset entry)))))
 
 (defun mem-entry-invalidate (entry)
   (setf (mem-entry-state entry) +mem-entry-state-not-needed+))
@@ -125,7 +144,7 @@
         for restype = (mem-entry-res-type entry)
         do (format *debug-io* "~S~%" entry)
         if (< restype 6)
-          append (list  (cdr (assoc restype *resource-types* :test #'=))
-                        (list :entry entry
-                              :data (mem-entry-load entry)))))
+          append (list (cdr (assoc restype *resource-types* :test #'=))
+                       (list :entry entry
+                             :data (mem-entry-load entry)))))
 ;;;;
