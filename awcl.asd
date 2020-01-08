@@ -9,4 +9,6 @@
   :depends-on (:binary-types)
   :components ((:file "package")
                (:file "awcl")
-               (:file "resources")))
+               (:file "resources")
+               (:file "parts")
+               (:file "vm")))
