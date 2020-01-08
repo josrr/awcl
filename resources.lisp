@@ -37,10 +37,40 @@
     :accessor mem-entry-size
     :binary-type binary-types:u16)))
 
+(defconstant +mem-entry-state-end-of-list+ #xFF)
+(defconstant +mem-entry-state-not-needed+ 0)
+(defconstant +mem-entry-state-loaded+ 1)
+(defconstant +mem-entry-state-load-me+ 2)
+
+(defconstant +rt-sound+ 0)
+(defconstant +rt-music+ 1)
+(defconstant +rt-poly-anim+ 2)
+(defconstant +rt-palette+ 3)
+(defconstant +rt-bytecode+ 4)
+(defconstant +rt-poly-cinematic+ 5)
+
+(defparameter *resource-types* `((,+rt-sound+ . :sound)
+                                 (,+rt-music+ . :music)
+                                 (,+rt-poly-anim+ . :poly-anim)
+                                 (,+rt-palette+ . :palette)
+                                 (,+rt-bytecode+ . :bytecode)
+                                 (,+rt-poly-cinematic+ . :polygon-cinematic)))
+
+(defmethod print-object ((object mem-entry) stream)
+  (print-unreadable-object (object stream :type t :identity t)
+    (format stream
+            "BANK~2,'0X (:BANK-OFFSET ~8X) (:PACKETP ~3@S) (:STATE ~3D) (:RANK ~3D) (:TYPE ~2,'0X)"
+            (mem-entry-bank-id object)
+            (mem-entry-bank-offset object)
+            (mem-entry-packetp object)
+            (mem-entry-state object)
+            (mem-entry-rank-num object)
+            (mem-entry-res-type object))))
+
 (defun mem-entry-packetp (entry)
   (/= (mem-entry-size entry) (mem-entry-packet-size entry)))
 
-(defun read-memlist (path)
+(defun memlist-create (path)
   ;;(declare (optimize (speed 3)))
   (let ((binary-types:*endian* :big-endian))
     (handler-case
@@ -62,10 +92,40 @@
         (format *debug-io* "~A~%" e)
         nil))))
 
-(defmethod print-object ((object mem-entry) stream)
-  (print-unreadable-object (object stream :type t :identity t)
-    (format stream
-            "(:BANK-ID ~3D) (:BANK-OFFSET ~10D) (:PACKETP ~3@S)"
-            (mem-entry-bank-id object)
-            (mem-entry-bank-offset object)
-            (mem-entry-packetp object))))
+(defun mem-entry-load (entry &key (pattern "Bank") (path #P"./data/Another_World/"))
+  ;unless (mem-entry-packetp entry)
+  (with-slots (bank-id bank-offset size) entry
+    (let ((buffer (make-array size :element-type '(unsigned-byte 8) :initial-element 0)))
+      (handler-case
+          (progn
+            (binary-types:with-binary-file (si (merge-pathnames path
+                                                                (format nil "~A~2,'0X" pattern bank-id)))
+              (file-position si bank-offset)
+              (read-sequence buffer si))
+            buffer)
+        (file-error (e)
+          (format *debug-io* "~A~%" e)
+          nil)
+        (error (e)
+          (format *debug-io* "~A~%" e)
+          nil)))))
+
+(defun mem-entry-invalidate (entry)
+  (setf (mem-entry-state entry) +mem-entry-state-not-needed+))
+
+(defun memlist-invalidate-all (memlist)
+  (map nil #'mem-entry-invalidate memlist))
+
+(defun memlist-load (memlist)
+  (loop for entry across (sort (remove-if #'(lambda (e)
+                                              (/= (mem-entry-state e)
+                                                  +mem-entry-state-load-me+))
+                                          memlist)
+                               #'> :key #'mem-entry-rank-num)
+        for restype = (mem-entry-res-type entry)
+        do (format *debug-io* "~S~%" entry)
+        if (< restype 6)
+          append (list  (cdr (assoc restype *resource-types* :test #'=))
+                        (list :entry entry
+                              :data (mem-entry-load entry)))))
+;;;;
