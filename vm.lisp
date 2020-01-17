@@ -8,4 +8,9 @@
     (list :memlist memlist
           :resources resources)))
 
+(defun vm-change-part (vm part-id)
+  (setf (getf vm :resources)
+        (setup-part part-id (getf vm :memlist)))
+  vm)
+
 ;;;;
