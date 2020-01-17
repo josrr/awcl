@@ -98,6 +98,13 @@
   (chk 0 :type (unsigned-byte 32))
   (data-size 0 :type (signed-byte 32)))
 
+(define-condition unpack-error (error)
+  ((position :initarg :position :reader unpack-error-position)
+   (bank-id :initarg :bank-id :reader unpack-error-bank-id))
+  (:report (lambda (condition stream)
+             (format stream "Error unpacking file ~S and position ~D."
+                     (unpack-error-bank-id condition) (unpack-error-position condition)))))
+
 (defun mem-entry-unpack (entry-bytes packed-size)
   (declare (optimize (speed 3))
            (type fixnum packed-size))
@@ -142,32 +149,32 @@
                  (loop with count = (+ 1 add-count (get-code n))
                        initially (decf (unpack-ctx-data-size ctx) count)
                        repeat count
-                       do (setf (aref obuf oi) (get-code 8))
+                       do (assert (>= oi 0))
+                          (setf (aref obuf oi) (get-code 8))
                           (decf oi)))
                (dec-unk-2 (n)
                  (loop with count = (1+ (unpack-ctx-size ctx))
                        and i = (get-code n)
                        initially (decf (unpack-ctx-data-size ctx) count)
                        repeat count
-                       do (setf (aref obuf oi) (aref obuf (+ oi i)))
+                       do (assert (>= oi 0))
+                          (setf (aref obuf oi) (aref obuf (+ oi i)))
                           (decf oi))))
-        (loop do ;;(format *debug-io* "data-size:~D~%" (unpack-ctx-data-size ctx))
-                 (cond ((not (next-chunk))
+        (loop do (cond ((not (next-chunk))
                         (setf (unpack-ctx-size ctx) 1)
                         (if (not (next-chunk))
                             (dec-unk-1 3 0)
                             (dec-unk-2 8)))
                        (t (let ((c (get-code 2)))
                             (cond
-                              ((= c 3)
-                               (dec-unk-1 8 8))
+                              ((= c 3) (dec-unk-1 8 8))
                               ((< c 2)
                                (setf (unpack-ctx-size ctx) (+ c 2))
                                (dec-unk-2 (+ c 9)))
                               (t (setf (unpack-ctx-size ctx) (get-code 8))
                                  (dec-unk-2 12))))))
               while (> (unpack-ctx-data-size ctx) 0))
-        (values obuf (zerop (unpack-ctx-crc ctx)))))))
+        (values obuf (unless (zerop (unpack-ctx-crc ctx)) (file-position s)))))))
 
 (defparameter *bank-file-pattern* "BANK")
 (defparameter *bank-file-path* #P"data/aw01/")
@@ -201,7 +208,13 @@
       (if (mem-entry-packetp entry)
           (let ((bytes (read-entry bank-id bank-offset packed-size)))
             (when bytes
-              (mem-entry-unpack bytes packed-size)))
+              (multiple-value-bind (unpacked position-crc-error)
+                  (mem-entry-unpack bytes packed-size)
+                (when position-crc-error
+                  (error (make-condition 'unpack-error
+                                         :bank-id bank-id
+                                         :position position-crc-error)))
+                unpacked)))
           (read-entry bank-id bank-offset size)))))
 
 (defun mem-entry-invalidate (entry)
