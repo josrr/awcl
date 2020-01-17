@@ -92,17 +92,91 @@
         (format *debug-io* "~A~%" e)
         nil))))
 
-(defun mem-entry-unpack (entry-bytes)
-  entry-bytes)
+(defstruct unpack-ctx
+  (size 0 :type (unsigned-byte 16))
+  (crc 0 :type (unsigned-byte 32))
+  (chk 0 :type (unsigned-byte 32))
+  (data-size 0 :type (signed-byte 32)))
+
+(defun mem-entry-unpack (entry-bytes packed-size)
+  (declare (optimize (speed 3))
+           (type fixnum packed-size))
+  (flexi-streams:with-input-from-sequence (s entry-bytes)
+    (file-position s (- packed-size 12))
+    (let* ((binary-types:*endian* :big-endian)
+           (ctx (make-unpack-ctx :chk (binary-types:read-binary 'binary-types:u32 s)
+                                 :crc (binary-types:read-binary 'binary-types:u32 s)
+                                 :data-size (binary-types:read-binary 'binary-types:u32 s)))
+           (obuf (make-array (unpack-ctx-data-size ctx) :element-type '(unsigned-byte 8)
+                                                        :initial-element 0))
+           (oi (1- (unpack-ctx-data-size ctx))))
+      (declare (type fixnum oi))
+      (setf (unpack-ctx-crc ctx) (logxor (unpack-ctx-crc ctx) (unpack-ctx-chk ctx)))
+      (file-position s (- packed-size 16))
+      (format *debug-io* "data-size:~12D  crc:~12X  chk:~12X~%obuf: ~S;  packed-size: ~10D~%file-position: ~D~%~%"
+              (unpack-ctx-data-size ctx) (unpack-ctx-crc ctx) (unpack-ctx-chk ctx)
+              (type-of obuf) packed-size (file-position s))
+      (labels ((rcr (cf)
+                 (let ((rcf (> (logand 1 (unpack-ctx-chk ctx)) 0)))
+                   (setf (unpack-ctx-chk ctx) (ash (unpack-ctx-chk ctx) -1))
+                   (when cf
+                     (setf (unpack-ctx-chk ctx) (logior (unpack-ctx-chk ctx) #x80000000)))
+                   rcf))
+               (next-chunk ()
+                 (let ((cf (rcr nil)))
+                   (when (zerop (unpack-ctx-chk ctx))
+                     (assert (>= (file-position s) 0))
+                     (setf (unpack-ctx-chk ctx) (binary-types:read-binary 'binary-types:u32 s)
+                           (unpack-ctx-crc ctx) (logxor (unpack-ctx-crc ctx) (unpack-ctx-chk ctx))
+                           cf (rcr t))
+                     (when (>= (file-position s) 8)
+                         (file-position s (- (file-position s) 8))))
+                   cf))
+               (get-code (n)
+                 (declare (type fixnum n))
+                 (loop repeat n
+                       for c fixnum = 0 then (ash c 1)
+                       if (next-chunk) do (setf c (logior c 1))
+                       finally (return c)))
+               (dec-unk-1 (n add-count)
+                 (loop with count = (+ 1 add-count (get-code n))
+                       initially (decf (unpack-ctx-data-size ctx) count)
+                       repeat count
+                       do (setf (aref obuf oi) (get-code 8))
+                          (decf oi)))
+               (dec-unk-2 (n)
+                 (loop with count = (1+ (unpack-ctx-size ctx))
+                       and i = (get-code n)
+                       initially (decf (unpack-ctx-data-size ctx) count)
+                       repeat count
+                       do (setf (aref obuf oi) (aref obuf (+ oi i)))
+                          (decf oi))))
+        (loop do ;;(format *debug-io* "data-size:~D~%" (unpack-ctx-data-size ctx))
+                 (cond ((not (next-chunk))
+                        (setf (unpack-ctx-size ctx) 1)
+                        (if (not (next-chunk))
+                            (dec-unk-1 3 0)
+                            (dec-unk-2 8)))
+                       (t (let ((c (get-code 2)))
+                            (cond
+                              ((= c 3)
+                               (dec-unk-1 8 8))
+                              ((< c 2)
+                               (setf (unpack-ctx-size ctx) (+ c 2))
+                               (dec-unk-2 (+ c 9)))
+                              (t (setf (unpack-ctx-size ctx) (get-code 8))
+                                 (dec-unk-2 12))))))
+              while (> (unpack-ctx-data-size ctx) 0))
+        (values obuf (zerop (unpack-ctx-crc ctx)))))))
 
 (defparameter *bank-file-pattern* "BANK")
-(defparameter *bank-file-path* #P"./data/aw01/")
+(defparameter *bank-file-path* #P"data/aw01/")
 
 (defun mem-entry-load (entry &key (pattern *bank-file-pattern*)
                                (path *bank-file-path*))
   (labels ((bank-file (bank-id)
              (let ((f1 (merge-pathnames path (format nil "~A~2,'0X" pattern bank-id)))
-                   (f2 (merge-pathnames path (format nil "~A~2,'0x" pattern bank-id))))
+                   (f2 (merge-pathnames path (format nil "~A~(~2,'0X~)" pattern bank-id))))
                (if (probe-file f1)
                    f1
                    (when (probe-file f2) f2))))
@@ -113,8 +187,7 @@
                                                   :initial-element 0))))
                (when buffer
                  (handler-case
-                     (binary-types:with-binary-file
-                         (si (merge-pathnames path (format nil "~A~2,'0X" pattern bank-id)))
+                     (with-open-file (si bank-file :element-type '(unsigned-byte 8))
                        (file-position si bank-offset)
                        (read-sequence buffer si)
                        buffer)
@@ -126,8 +199,10 @@
                      nil))))))
     (with-slots (bank-id bank-offset size packed-size) entry
       (if (mem-entry-packetp entry)
-          (mem-entry-unpack (read-entry bank-id bank-offset packed-size))
-          (read-entry bank-id bank-offset entry)))))
+          (let ((bytes (read-entry bank-id bank-offset packed-size)))
+            (when bytes
+              (mem-entry-unpack bytes packed-size)))
+          (read-entry bank-id bank-offset size)))))
 
 (defun mem-entry-invalidate (entry)
   (setf (mem-entry-state entry) +mem-entry-state-not-needed+))
@@ -147,4 +222,16 @@
           append (list (cdr (assoc restype *resource-types* :test #'=))
                        (list :entry entry
                              :data (mem-entry-load entry)))))
+
+
 ;;;;
+
+(defun be-ui32-a (v)
+  (let ((uv 0))
+    (dotimes (i (binary-types:sizeof 'binary-types:u32))
+      (setf uv (+ (* uv #x100)
+                  (aref v i))))
+    uv))
+
+(defun be-ui32 (w x y z)
+  (logior (ash w 24) (ash x 16) (ash y 8) z))
