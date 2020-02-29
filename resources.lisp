@@ -96,7 +96,7 @@
   (size 0 :type (unsigned-byte 16))
   (crc 0 :type (unsigned-byte 32))
   (chk 0 :type (unsigned-byte 32))
-  (data-size 0 :type (signed-byte 32)))
+  (data-size 0 :type (unsigned-byte 32)))
 
 (define-condition unpack-error (error)
   ((position :initarg :position :reader unpack-error-position)
