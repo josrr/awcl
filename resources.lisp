@@ -71,7 +71,6 @@
   (/= (mem-entry-size entry) (mem-entry-packed-size entry)))
 
 (defun memlist-create (path)
-  ;;(declare (optimize (speed 3)))
   (let ((binary-types:*endian* :big-endian))
     (handler-case
         (binary-types:with-binary-file (s path)
@@ -79,11 +78,10 @@
                  (num-entries (floor file-size 20))
                  (memlist (make-array num-entries :element-type '(or null mem-entry)
                                                   :initial-element nil)))
-            (declare (type fixnum file-size num-entries))
             (handler-case
                 (loop for i from 0 below num-entries
-                      for entry = (binary-types:read-binary 'mem-entry s)
-                      do (setf (aref memlist i) entry)
+                      do (setf (aref memlist i)
+                               (binary-types:read-binary 'mem-entry s))
                       finally (return memlist))
               (end-of-file (e)
                 (format *debug-io* "~A~%" e)
