@@ -3,6 +3,8 @@
 
 Another world/Out of this world virtual machine interpreter.
 
+This is a work in progress.
+
 * License
 
 GPLv3
