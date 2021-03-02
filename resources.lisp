@@ -104,8 +104,6 @@
                      (unpack-error-bank-id condition) (unpack-error-position condition)))))
 
 (defun mem-entry-unpack (entry-bytes packed-size)
-  (declare (optimize (speed 3))
-           (type fixnum packed-size))
   (flexi-streams:with-input-from-sequence (s entry-bytes)
     (file-position s (- packed-size 12))
     (let* ((binary-types:*endian* :big-endian)
@@ -115,18 +113,16 @@
            (obuf (make-array (unpack-ctx-data-size ctx) :element-type '(unsigned-byte 8)
                                                         :initial-element 0))
            (oi (1- (unpack-ctx-data-size ctx))))
-      (declare (type fixnum oi))
       (setf (unpack-ctx-crc ctx) (logxor (unpack-ctx-crc ctx) (unpack-ctx-chk ctx)))
       (file-position s (- packed-size 16))
       (format *debug-io* "data-size:~12D  crc:~12X  chk:~12X~%obuf: ~S;  packed-size: ~10D~%file-position: ~D~%~%"
               (unpack-ctx-data-size ctx) (unpack-ctx-crc ctx) (unpack-ctx-chk ctx)
               (type-of obuf) packed-size (file-position s))
       (labels ((rcr (cf)
-                 (let ((rcf (> (logand 1 (unpack-ctx-chk ctx)) 0)))
+                 (prog1 (> (logand 1 (unpack-ctx-chk ctx)) 0)
                    (setf (unpack-ctx-chk ctx) (ash (unpack-ctx-chk ctx) -1))
                    (when cf
-                     (setf (unpack-ctx-chk ctx) (logior (unpack-ctx-chk ctx) #x80000000)))
-                   rcf))
+                     (setf (unpack-ctx-chk ctx) (logior (unpack-ctx-chk ctx) #x80000000)))))
                (next-chunk ()
                  (let ((cf (rcr nil)))
                    (when (zerop (unpack-ctx-chk ctx))
@@ -138,9 +134,8 @@
                          (file-position s (- (file-position s) 8))))
                    cf))
                (get-code (n)
-                 (declare (type fixnum n))
                  (loop repeat n
-                       for c fixnum = 0 then (ash c 1)
+                       for c = 0 then (ash c 1)
                        if (next-chunk) do (setf c (logior c 1))
                        finally (return c)))
                (dec-unk-1 (n add-count)
@@ -182,37 +177,33 @@
   (labels ((bank-file (bank-id)
              (let ((f1 (merge-pathnames path (format nil "~A~2,'0X" pattern bank-id)))
                    (f2 (merge-pathnames path (format nil "~A~(~2,'0X~)" pattern bank-id))))
-               (if (probe-file f1)
-                   f1
-                   (when (probe-file f2) f2))))
+               (or (and (probe-file f1) f1)
+                   (and (probe-file f2) f2))))
            (read-entry (bank-id bank-offset size)
-             (let* ((bank-file (bank-file bank-id))
-                    (buffer (and bank-file
-                                 (make-array size :element-type '(unsigned-byte 8)
-                                                  :initial-element 0))))
-               (when buffer
-                 (handler-case
-                     (with-open-file (si bank-file :element-type '(unsigned-byte 8))
-                       (file-position si bank-offset)
-                       (read-sequence buffer si)
-                       buffer)
-                   (file-error (e)
-                     (format *debug-io* "~A~%" e)
-                     nil)
-                   (error (e)
-                     (format *debug-io* "~A~%" e)
-                     nil))))))
+             (a:when-let ((bank-file (bank-file bank-id))
+                          (buffer (make-array size :element-type '(unsigned-byte 8)
+                                                    :initial-element 0)))
+               (handler-case
+                   (with-open-file (si bank-file :element-type '(unsigned-byte 8))
+                     (file-position si bank-offset)
+                     (read-sequence buffer si)
+                     buffer)
+                 (file-error (e)
+                   (format *debug-io* "~A~%" e)
+                   nil)
+                 (error (e)
+                   (format *debug-io* "~A~%" e)
+                   nil)))))
     (with-slots (bank-id bank-offset size packed-size) entry
       (if (mem-entry-packetp entry)
-          (let ((bytes (read-entry bank-id bank-offset packed-size)))
-            (when bytes
-              (multiple-value-bind (unpacked position-crc-error)
-                  (mem-entry-unpack bytes packed-size)
-                (when position-crc-error
-                  (error (make-condition 'unpack-error
-                                         :bank-id bank-id
-                                         :position position-crc-error)))
-                unpacked)))
+          (a:when-let ((bytes (read-entry bank-id bank-offset packed-size)))
+            (multiple-value-bind (unpacked position-crc-error)
+                (mem-entry-unpack bytes packed-size)
+              (when position-crc-error
+                (error (make-condition 'unpack-error
+                                       :bank-id bank-id
+                                       :position position-crc-error)))
+              unpacked))
           (read-entry bank-id bank-offset size)))))
 
 (defun mem-entry-invalidate (entry)
