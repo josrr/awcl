@@ -18,38 +18,58 @@
 (defconstant +vm-variable-hero-action-pos-mask+ #xFE)
 (defconstant +vm-variable-pause-slices+ #xFF)
 
+(defclass channel-state ()
+  ((current :accessor channel-state-current
+            :initform nil
+            :initarg :current)
+   (requested :accessor channel-state-requested
+              :initform nil
+              :initarg :requested)))
+
+(defclass channel ()
+  ((id :reader channel-id
+       :initarg :id)
+   (pc-offset :accessor channel-pc-offset
+              :initform +vm-inactive-channel+
+              :initarg :pc-offset)
+   (requested-pc-offset :accessor channel-requested-pc-offset
+                        :initform 0
+                        :initarg :requested-pc-offset)
+   (state :reader channel-state
+          :initform (make-instance 'channel-state)
+          :initarg :is-active)))
+
+(defun channel-is-active-p (channel)
+  (and (channel-state-current (channel-state channel))
+       (/= (channel-pc-offset channel) +vm-inactive-channel+)))
+
 (defstruct vm
   (memlist nil :type (or null (simple-array (or null mem-entry) *)))
   (fast-mode nil :type boolean)
   (resources nil :type list)
   (num-variables *num-variables* :type fixnum)
   (num-channels *num-channels* :type fixnum)
-  (variables nil :type (or null (simple-array (unsigned-byte 16) *)))
+  (variables nil :type (or null (simple-array (signed-byte 16) *)))
   (script-stream nil)
-  (channels nil :type (or null (simple-array list *))))
+  (channels nil :type (or null (simple-array channel))))
 
 (defun vm-create (memlist-path)
-  (let* ((memlist (memlist-create memlist-path))
-         (resources (setup-part +game-part-1+ memlist)))
+  (let ((memlist (memlist-create memlist-path)))
     (make-vm :memlist memlist
              :fast-mode nil
-             :resources resources
+             :resources (setup-part +game-part-1+ memlist)
              :num-variables *num-variables*
              :num-channels *num-channels*
              :variables (make-array *num-variables*
                                     :initial-element 0
-                                    :element-type '(unsigned-byte 16))
+                                    :element-type '(signed-byte 16))
              :script-stream nil
              :channels (make-array *num-channels*
                                    :initial-contents (loop for i from 0 below *num-channels*
-                                                           collect (list :id i
-                                                                         :pc-offset +vm-inactive-channel+
-                                                                         :requested-pc-offset 0
-                                                                         :is-active (list :curr-state nil
-                                                                                          :requested-state nil)))
-                                   :element-type 'list))))
+                                                           collect (make-instance 'channel :id i))
+                                   :element-type 'channel))))
 
-(defparameter *vm-opcodes* (make-array #xFF :element-type 'function))
+(defparameter *vm-opcodes* (make-array #xFF :element-type '(or null function)))
 
 (defun vm-op-function (opcode &optional (opcodes *vm-opcodes*))
   (or (aref opcodes opcode)
@@ -64,7 +84,6 @@
              (format stream "Error runing bytecode opcode ~S in position ~D."
                      (runtime-error-opcode condition)
                      (runtime-error-position condition)))))
-
 
 (defun run-channel (vm)
   (loop with stop = nil
@@ -95,29 +114,27 @@
         end
         until stop))
 
+#|(lambda (c)
+  (and (not (getf (getf c :is-active) :curr-state))
+       (/= (getf c :pc-offset) +vm-inactive-channel+)))|#
 
 (defun run-one-frame (vm)
-  (loop with active-channels = (remove-if (lambda (c)
-                                            (and (not (getf (getf c :is-active) :curr-state))
-                                                 (/= (getf c :pc-offset) +vm-inactive-channel+)))
+  (loop for channel across (remove-if-not #'channel-is-active-p
                                           (vm-channels vm))
-        for channel across active-channels
-        do (file-position (vm-script-stream vm) (getf channel :pc-offset))
+        do (file-position (vm-script-stream vm) (channel-pc-offset channel))
            (run-channel vm)))
 
 ;;;;
 (defun vm-change-part (vm part-id)
-  (setf (vm-resources vm)
-        (setup-part part-id (vm-memlist vm)))
-  (map nil (lambda (c) (setf (getf c :pc-offset) +vm-inactive-channel+
-                             (getf (getf c :is-active) :curr-state) nil))
-       (vm-channels vm))
-  (setf (vm-script-stream vm) (flexi-streams:make-in-memory-input-stream
-                               (getf (getf (vm-resources vm) :bytecode)
-                                     :data))
-        (getf (aref (vm-channels vm) 0) :pc-offset) 0)
+  (setf (vm-resources vm) (setup-part part-id (vm-memlist vm))
+        (vm-script-stream vm) (flexi-streams:make-in-memory-input-stream
+                               (resource-data (getf (vm-resources vm) :bytecode)))
+        (channel-pc-offset (aref (vm-channels vm) 0)) 0)
+  (loop for c across (vm-channels vm)
+        do (setf (channel-pc-offset c) +vm-inactive-channel+
+                 (channel-state-current (channel-state c)) nil))
   (file-position (vm-script-stream vm) 0)
-  vm)
+  (values))
 
 (defun vm-init (vm)
   (let ((variables (vm-variables vm)))
@@ -125,96 +142,123 @@
       (setf (aref variables i) 0))
     (setf (aref variables #x54) #x81
           (aref variables +vm-variable-random-seed+) (get-universal-time)
-          ;; (player-mark-var (getf vm :player)) (aref variables +variable-mus-mark+)
+          ;; (sfxplayer-mark-var (getf vm :player)) (aref variables +variable-mus-mark+)
           (vm-fast-mode vm) nil)))
 
 ;;;;
-(defmacro def-op-function ((name opcode) &body body)
-  (let ((g-opcode (gensym))
-        (g-func (gensym)))
-    `(let* ((,g-opcode ,opcode)
-            (,g-func (defun ,(alexandria:symbolicate name '-op) () ,@body)))
-       (setf (aref *vm-opcodes* ,g-opcode) ,g-func))))
+(defmacro def-op-function ((vm (name opcode)) &body body)
+  (let ((g-func (gensym)))
+    `(let ((,g-func (lambda (,vm)
+                      ,@body)))
+       (setf (symbol-function (alexandria:symbolicate ',name '-op)) ,g-func
+             (aref *vm-opcodes* ,opcode) ,g-func))))
 
-(def-op-function (cmov #x00)
+(def-op-function (vm (cmov #x00))
+  (declare (ignore vm))
   nil)
 
-(def-op-function (mov #x01)
+(def-op-function (vm (mov #x01))
+  (declare (ignore vm))
   nil)
 
-(def-op-function (add #x02)
+(def-op-function (vm (add #x02))
+  (declare (ignore vm))
   nil)
 
-(def-op-function (cadd #x03)
+(def-op-function (vm (cadd #x03))
+  (declare (ignore vm))
   nil)
 
-(def-op-function (call #x04)
+(def-op-function (vm (call #x04))
+  (declare (ignore vm))
   nil)
 
-(def-op-function (ret #x05)
+(def-op-function (vm (ret #x05))
+  (declare (ignore vm))
   nil)
 
-(def-op-function (pause-thrd #x06)
+(def-op-function (vm (pause-thrd #x06))
+  (declare (ignore vm))
   nil)
 
-(def-op-function (cond-jmp #x07)
+(def-op-function (vm (cond-jmp #x07))
+  (declare (ignore vm))
   nil)
 
-(def-op-function (set-vect #x08)
+(def-op-function (vm (set-vect #x08))
+  (declare (ignore vm))
   nil)
 
-(def-op-function (jnz #x09)
+(def-op-function (vm (jnz #x09))
+  (declare (ignore vm))
   nil)
 
-(def-op-function (cjmp #x0A)
+(def-op-function (vm (cjmp #x0A))
+  (declare (ignore vm))
   nil)
 
-(def-op-function (set-pal #x0B)
+(def-op-function (vm (set-pal #x0B))
+  (declare (ignore vm))
   nil)
 
-(def-op-function (reset-thrd #x0C)
+(def-op-function (vm (reset-thrd #x0C))
+  (declare (ignore vm))
   nil)
 
-(def-op-function (slct-fb #x0D)
+(def-op-function (vm (slct-fb #x0D))
+  (declare (ignore vm))
   nil)
 
-(def-op-function (fill-fb #x0E)
+(def-op-function (vm (fill-fb #x0E))
+  (declare (ignore vm))
   nil)
 
-(def-op-function (copy-fb #x0F)
+(def-op-function (vm (copy-fb #x0F))
+  (declare (ignore vm))
   nil)
 
-(def-op-function (blit-fb #x10)
+(def-op-function (vm (blit-fb #x10))
+  (declare (ignore vm))
   nil)
 
-(def-op-function (kill-thdr #x11)
+(def-op-function (vm (kill-thdr #x11))
+  (declare (ignore vm))
   nil)
 
-(def-op-function (draw-text #x12)
+(def-op-function (vm (draw-text #x12))
+  (declare (ignore vm))
   nil)
 
-(def-op-function (sub #x13)
+(def-op-function (vm (sub #x13))
+  (declare (ignore vm))
   nil)
 
-(def-op-function (and #x14)
+(def-op-function (vm (and #x14))
+  (declare (ignore vm))
   nil)
 
-(def-op-function (or #x15)
+(def-op-function (vm (or #x15))
+  (declare (ignore vm))
   nil)
 
-(def-op-function (shl #x16)
+(def-op-function (vm (shl #x16))
+  (declare (ignore vm))
   nil)
 
-(def-op-function (shr #x17)
+(def-op-function (vm (shr #x17))
+  (declare (ignore vm))
   nil)
 
-(def-op-function (play-sound #x18)
+(def-op-function (vm (play-sound #x18))
+  (declare (ignore vm))
   nil)
 
-(def-op-function (load-resc #x19)
+(def-op-function (vm (load-resc #x19))
+  (declare (ignore vm))
   nil)
 
-(def-op-function (play-music #x1A)
+(def-op-function (vm (play-music #x1A))
+  (declare (ignore vm))
   nil)
 
 ;;;;
