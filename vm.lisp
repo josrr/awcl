@@ -44,9 +44,10 @@
        (/= (channel-pc-offset channel) +vm-inactive-channel+)))
 
 (defstruct vm
-  (memlist nil :type (or null (simple-array (or null mem-entry) *)))
+  ;;(memlist nil :type (or null (simple-array (or null mem-entry) *)))
   (fast-mode nil :type boolean)
-  (resources nil :type list)
+  (resource-manager nil :type resource-manager)
+  ;;(resources nil :type list)
   (num-variables *num-variables* :type fixnum)
   (num-channels *num-channels* :type fixnum)
   (variables nil :type (or null (simple-array (signed-byte 16) *)))
@@ -54,20 +55,22 @@
   (channels nil :type (or null (simple-array channel))))
 
 (defun vm-create (memlist-path)
-  (let ((memlist (memlist-create memlist-path)))
-    (make-vm :memlist memlist
-             :fast-mode nil
-             :resources (setup-part +game-part-1+ memlist)
-             :num-variables *num-variables*
-             :num-channels *num-channels*
-             :variables (make-array *num-variables*
-                                    :initial-element 0
-                                    :element-type '(signed-byte 16))
-             :script-stream nil
-             :channels (make-array *num-channels*
-                                   :initial-contents (loop for i from 0 below *num-channels*
-                                                           collect (make-instance 'channel :id i))
-                                   :element-type 'channel))))
+  (let* ((memlist (memlist-create memlist-path))
+         (vm (make-vm :fast-mode nil
+                      :resource-manager (make-instance 'resource-manager :memlist memlist)
+                      ;;:resources 
+                      :num-variables *num-variables*
+                      :num-channels *num-channels*
+                      :variables (make-array *num-variables*
+                                             :initial-element 0
+                                             :element-type '(signed-byte 16))
+                      :script-stream nil
+                      :channels (make-array *num-channels*
+                                            :initial-contents (loop for i from 0 below *num-channels*
+                                                                    collect (make-instance 'channel :id i))
+                                            :element-type 'channel))))
+    (rm-setup-part (vm-resource-manager vm) +game-part-1+)
+    vm))
 
 (defparameter *vm-opcodes* (make-array #xFF :element-type '(or null function)))
 
