@@ -262,9 +262,27 @@
                                #'> :key #'mem-entry-rank-num)
         for restype = (cdr (assoc (mem-entry-res-type entry) *resource-types*))
         do (format *debug-io* "~S~%" entry)
-        when restype 
+        when restype
           append (list (a:make-keyword (symbol-name restype))
                        (make-resource restype entry (mem-entry-load entry)))))
+
+(defun rm-setup-part (rm part-id &optional (memlist-parts *memlist-parts*))
+  (assert (or (>= part-id +game-part-first+)
+              (<= part-id +game-part-last+)))
+  (let ((memlist (rm-memlist rm)))
+    (a:when-let* ((idx (- part-id +game-part-first+))
+                  (part-desc (aref memlist-parts idx))
+                  (palette-entry (aref memlist (getf part-desc :palette)))
+                  (code-entry (aref memlist (getf part-desc :code)))
+                  (video-1-entry (aref memlist (getf part-desc :video-1)))
+                  (video-2-idx (getf part-desc :video-2)))
+      (memlist-invalidate-all memlist)
+      (setf (mem-entry-state palette-entry) +mem-entry-state-load-me+
+            (mem-entry-state code-entry) +mem-entry-state-load-me+
+            (mem-entry-state video-1-entry) +mem-entry-state-load-me+)
+      (when (/= video-2-idx +memlist-part-none+)
+        (setf (mem-entry-state (aref memlist video-2-idx)) +mem-entry-state-load-me+))
+      (rm-load-resources rm memlist))))
 
 ;;;;
 (defun be-ui32-a (v)

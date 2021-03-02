@@ -33,21 +33,4 @@
     (:palette #x7d :code #x7e :video-1 #x7f :video-2 #x00)
     (:palette #x7d :code #x7e :video-1 #x7f :video-2 #x00)))
 
-(defun setup-part (part-id memlist &optional (memlist-parts *memlist-parts*))
-  (assert (or (>= part-id +game-part-first+)
-              (<= part-id +game-part-last+)))
-  (a:when-let* ((idx (- part-id +game-part-first+))
-                (part-desc (aref memlist-parts idx))
-                (palette-entry (aref memlist (getf part-desc :palette)))
-                (code-entry (aref memlist (getf part-desc :code)))
-                (video-1-entry (aref memlist (getf part-desc :video-1)))
-                (video-2-idx (getf part-desc :video-2)))
-    (memlist-invalidate-all memlist)
-    (setf (mem-entry-state palette-entry) +mem-entry-state-load-me+
-          (mem-entry-state code-entry) +mem-entry-state-load-me+
-          (mem-entry-state video-1-entry) +mem-entry-state-load-me+)
-    (when (/= video-2-idx +memlist-part-none+)
-      (setf (mem-entry-state (aref memlist video-2-idx)) +mem-entry-state-load-me+))
-    (memlist-load memlist)))
-
 ;;;;
