@@ -49,13 +49,6 @@
 (defconstant +rt-bytecode+ 4)
 (defconstant +rt-poly-cinematic+ 5)
 
-(defparameter *resource-types* `((,+rt-sound+ . :sound)
-                                 (,+rt-music+ . :music)
-                                 (,+rt-poly-anim+ . :poly-anim)
-                                 (,+rt-palette+ . :palette)
-                                 (,+rt-bytecode+ . :bytecode)
-                                 (,+rt-poly-cinematic+ . :polygon-cinematic)))
-
 (defmethod print-object ((object mem-entry) stream)
   (print-unreadable-object (object stream :type t :identity t)
     (format stream
@@ -212,22 +205,42 @@
 (defun memlist-invalidate-all (memlist)
   (map nil #'mem-entry-invalidate memlist))
 
+(defparameter *resource-types* `((,+rt-sound+ . sound)
+                                 (,+rt-music+ . music)
+                                 (,+rt-poly-anim+ . polygon-anim)
+                                 (,+rt-palette+ . palette)
+                                 (,+rt-bytecode+ . bytecode)
+                                 (,+rt-poly-cinematic+ . polygon-cinematic)))
+
+(defclass resource ()
+  ((entry :reader resource-entry
+          :initarg :entry)
+   (data :reader resource-data
+         :initarg :data)))
+
+(defclass sound (resource) ())
+(defclass music (resource) ())
+(defclass polygon-anim (resource) ())
+(defclass palette (resource) ())
+(defclass bytecode (resource) ())
+(defclass polygon-cinematic (resource) ())
+
+(defun make-resource (restype entry data)
+  (make-instance restype :entry entry :data data))
+
 (defun memlist-load (memlist)
   (loop for entry across (sort (remove-if #'(lambda (e)
                                               (/= (mem-entry-state e)
                                                   +mem-entry-state-load-me+))
                                           memlist)
                                #'> :key #'mem-entry-rank-num)
-        for restype = (mem-entry-res-type entry)
+        for restype = (cdr (assoc (mem-entry-res-type entry) *resource-types*))
         do (format *debug-io* "~S~%" entry)
-        if (< restype 6)
-          append (list (cdr (assoc restype *resource-types* :test #'=))
-                       (list :entry entry
-                             :data (mem-entry-load entry)))))
-
+        when restype 
+          append (list (a:make-keyword (symbol-name restype))
+                       (make-resource restype entry (mem-entry-load entry)))))
 
 ;;;;
-
 (defun be-ui32-a (v)
   (let ((uv 0))
     (dotimes (i (binary-types:sizeof 'binary-types:u32))
