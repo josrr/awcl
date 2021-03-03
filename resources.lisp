@@ -175,11 +175,15 @@
            (read-entry (bank-id bank-offset size)
              (a:when-let ((bank-file (bank-file bank-id))
                           (buffer (make-array size :element-type '(unsigned-byte 8)
-                                                    :initial-element 0)))
+                                                   :initial-element 0)))
                (handler-case
                    (with-open-file (si bank-file :element-type '(unsigned-byte 8))
                      (file-position si bank-offset)
                      (read-sequence buffer si)
+                     (setf (mem-entry-state entry)
+                           (if (= (mem-entry-res-type entry) +rt-poly-anim+)
+                               +mem-entry-state-not-needed+
+                               +mem-entry-state-loaded+))
                      buffer)
                  (file-error (e)
                    (format *debug-io* "~A~%" e)
