@@ -55,20 +55,19 @@
   (channels nil :type (or null (simple-array channel))))
 
 (defun vm-create (memlist-path)
-  (let* ((memlist (memlist-create memlist-path))
-         (vm (make-vm :fast-mode nil
-                      :resource-manager (make-instance 'resource-manager :memlist memlist)
-                      ;;:resources 
-                      :num-variables *num-variables*
-                      :num-channels *num-channels*
-                      :variables (make-array *num-variables*
-                                             :initial-element 0
-                                             :element-type '(signed-byte 16))
-                      :script-stream nil
-                      :channels (make-array *num-channels*
-                                            :initial-contents (loop for i from 0 below *num-channels*
-                                                                    collect (make-instance 'channel :id i))
-                                            :element-type 'channel))))
+  (let ((vm (make-vm :fast-mode nil
+                     :resource-manager (make-instance 'resource-manager
+                                                      :memlist (memlist-create memlist-path))
+                     :num-variables *num-variables*
+                     :num-channels *num-channels*
+                     :variables (make-array *num-variables*
+                                            :initial-element 0
+                                            :element-type '(signed-byte 16))
+                     :script-stream nil
+                     :channels (make-array *num-channels*
+                                           :initial-contents (loop for i from 0 below *num-channels*
+                                                                   collect (make-instance 'channel :id i))
+                                           :element-type 'channel))))
     (rm-setup-part (vm-resource-manager vm) +game-part-1+)
     vm))
 
