@@ -239,16 +239,12 @@
                     :initform 0)
    (next-part-id :accessor rm-next-part-id
                  :initform 0)
-   (mem :reader rm-mem
-        :initform (make-array (* 600 1024)
-                              :initial-element 0
-                              :element-type '(unsigned-byte 8)))
    (script-stream :accessor rm-script-stream
                   :initform nil)
    (video-stream :accessor rm-video-stream
                  :initform nil)
-   (seg-video :accessor rm-seg-video
-              :initform nil)
+   (seg-palettes :accessor rm-seg-palettes
+                 :initform nil)
    (seg-bytecode :accessor rm-seg-bytecode
                  :initform nil)
    (seg-cinematic :accessor rm-seg-cinematic
