@@ -243,35 +243,46 @@
                   :initform nil)
    (video-stream :accessor rm-video-stream
                  :initform nil)
-   (seg-palettes :accessor rm-seg-palettes
-                 :initform nil)
-   (seg-bytecode :accessor rm-seg-bytecode
-                 :initform nil)
-   (seg-cinematic :accessor rm-seg-cinematic
-                  :initform nil)
+   (palette-stream :accessor rm-palette-stream
+                   :initform nil)
+   (cinematic-stream :accessor rm-cinematic-stream
+                     :initform nil)
+   ;;(seg-palettes :accessor rm-seg-palettes :initform nil)
+   ;;(seg-bytecode :accessor rm-seg-bytecode :initform nil)
+   ;;(seg-cinematic :accessor rm-seg-cinematic :initform nil)
    (seg-video2 :accessor rm-seg-video2
                :initform nil)
    (use-seg-video2 :accessor rm-use-seg-video2
                    :initform nil)))
 
 (defun rm-load-resources (rm)
-  (loop with memlist = (rm-memlist rm)
+  (loop initially (setf (rm-video-stream rm) nil
+                        (rm-script-stream rm) nil
+                        (rm-palette-stream rm) nil
+                        (rm-cinematic-stream rm) nil)
         for entry across (sort (remove-if #'(lambda (e)
                                               (/= (mem-entry-state e)
                                                   +mem-entry-state-load-me+))
-                                          memlist)
+                                          (rm-memlist rm))
                                #'> :key #'mem-entry-rank-num)
         for restype = (cdr (assoc (mem-entry-res-type entry) *resource-types*))
         for res = (and restype
                        (make-resource restype entry (mem-entry-load entry)))
         do (format *debug-io* "res: ~S~%" res)
         when res
-          do (if (eq restype 'polygon-anim)
-                 (setf (rm-video-stream rm) (flexi-streams:make-in-memory-input-stream
-                                             (resource-data res)))
-                 (progn
-                   (setf (rm-script-stream rm) (flexi-streams:make-in-memory-input-stream
-                                                (resource-data res)))))))
+          do (case restype
+               ((polygon-anim) (setf (rm-video-stream rm)
+                                     (flexi-streams:make-in-memory-input-stream
+                                      (resource-data res))))
+               ((polygon-cinematic) (setf (rm-cinematic-stream rm)
+                                          (flexi-streams:make-in-memory-input-stream
+                                           (resource-data res))))
+               ((bytecode) (setf (rm-script-stream rm)
+                                 (flexi-streams:make-in-memory-input-stream
+                                  (resource-data res))))
+               ((palette) (setf (rm-palette-stream rm)
+                                (flexi-streams:make-in-memory-input-stream
+                                 (resource-data res)))))))
 
 (defun rm-setup-part (rm part-id &optional (memlist-parts *memlist-parts*))
   (assert (or (>= part-id +game-part-first+)
