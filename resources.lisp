@@ -303,9 +303,9 @@
           (setf (mem-entry-state (aref memlist video-2-idx)) +mem-entry-state-load-me+
                 (rm-seg-video2 rm) (mem-entry-buffer (aref memlist video-2-idx))))
         (rm-load-resources rm)
-        (setf (rm-seg-palettes rm) (mem-entry-buffer palette-entry)
-              (rm-seg-bytecode rm) (mem-entry-buffer bytecode-entry)
-              (rm-seg-cinematic rm) (mem-entry-buffer video-1-entry)
+        (setf ;;(rm-seg-palettes rm) (mem-entry-buffer palette-entry)
+              ;;(rm-seg-bytecode rm) (mem-entry-buffer bytecode-entry)
+              ;;(rm-seg-cinematic rm) (mem-entry-buffer video-1-entry)
               (rm-current-part-id rm) part-id)))))
 
 ;;;;
