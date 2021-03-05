@@ -308,6 +308,12 @@
               ;;(rm-seg-cinematic rm) (mem-entry-buffer video-1-entry)
               (rm-current-part-id rm) part-id)))))
 
+(defun rm-setup-next-part (rm)
+  (with-slots (next-part-id) rm
+    (when (/= 0 next-part-id)
+      (rm-setup-part rm next-part-id)
+      (setf next-part-id 0))))
+
 ;;;;
 (defun be-ui32-a (v)
   (let ((uv 0))
