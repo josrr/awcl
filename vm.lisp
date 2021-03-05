@@ -5,6 +5,7 @@
 (defparameter *num-channels* 64)
 (defparameter *num-variables* 256)
 
+(defconstant +vm-no-setvec-requested+ #xFFFF)
 (defconstant +vm-inactive-channel+ #xFFFF)
 (defconstant +vm-variable-random-seed+ #x3C)
 (defconstant +vm-variable-last-keychar+ #xDA)
@@ -70,6 +71,17 @@
                                            :element-type 'channel))))
     (rm-setup-part (vm-resource-manager vm) +game-part-1+)
     vm))
+
+(defun check-thread-requests (vm)
+  (rm-setup-next-part (vm-resource-manager vm))
+  (loop for channel across (vm-channels vm)
+        for offset = (channel-requested-pc-offset channel)
+        do (setf (channel-state-current (channel-state channel))
+                 (channel-state-current (channel-state channel)))
+        when (/= offset +vm-no-setvec-requested+)
+          do (setf (channel-pc-offset channel) (if (= offset #xFFFE)
+                                                   +vm-inactive-channel+ offset)
+                   (channel-requested-pc-offset channel) +vm-no-setvec-requested+)))
 
 (defparameter *vm-opcodes* (make-array #xFF :element-type '(or null function)))
 
