@@ -101,7 +101,8 @@
 
 (defun run-channel (vm)
   (loop with stop = nil
-        for opcode = (binary-types:read-binary 'binary-types:u8 (vm-script-stream vm))
+        for opcode = (binary-types:read-binary 'binary-types:u8
+                                               (rm-script-stream (vm-resource-manager vm)))
         if (> (logand opcode #x80) 0 ) do
           (format *debug-io* "[and #x80]  opcode=~4X  ⸺  ~2X ~2X ~2X~%" opcode
                   (binary-types:read-binary 'binary-types:u8 (vm-script-stream vm))
