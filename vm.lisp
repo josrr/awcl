@@ -77,7 +77,7 @@
   (loop for channel across (vm-channels vm)
         for offset = (channel-requested-pc-offset channel)
         do (setf (channel-state-current (channel-state channel))
-                 (channel-state-current (channel-state channel)))
+                 (channel-state-requested (channel-state channel)))
         when (/= offset +vm-no-setvec-requested+)
           do (setf (channel-pc-offset channel) (if (= offset #xFFFE)
                                                    +vm-inactive-channel+ offset)
