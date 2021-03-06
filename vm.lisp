@@ -100,18 +100,18 @@
 
 (defun run-channel (vm)
   (loop with stop = nil
-        for opcode = (binary-types:read-binary 'binary-types:u8
-                                               (rm-script-stream (vm-resource-manager vm)))
+        with script-stream = (rm-script-stream (vm-resource-manager vm))
+        for opcode = (binary-types:read-binary 'binary-types:u8 script-stream)
         if (> (logand opcode #x80) 0 ) do
           (format *debug-io* "[and #x80]  opcode=~4X  ⸺  ~2X ~2X ~2X~%" opcode
-                  (binary-types:read-binary 'binary-types:u8 (vm-script-stream vm))
-                  (binary-types:read-binary 'binary-types:u8 (vm-script-stream vm))
-                  (binary-types:read-binary 'binary-types:u8 (vm-script-stream vm)))
+                  (binary-types:read-binary 'binary-types:u8 script-stream)
+                  (binary-types:read-binary 'binary-types:u8 script-stream)
+                  (binary-types:read-binary 'binary-types:u8 script-stream))
         else if (> (logand opcode #x40) 0) do
           (format *debug-io* "[and #x40]  opcode=~4X  ⸺  ~%" opcode)
-          (let ((off (* 2 (binary-types:read-binary 'binary-types:u16 (vm-script-stream vm))))
+          (let ((off (* 2 (binary-types:read-binary 'binary-types:u16 script-stream)))
                 (y)
-                (x (binary-types:read-binary 'binary-types:u8 (vm-script-stream vm))))
+                (x (binary-types:read-binary 'binary-types:u8 script-stream)))
             (cond ((zerop (logand opcode #x20))
                    )
                   ((= (logand opcode #x10) 1))
@@ -122,19 +122,20 @@
         else if (> opcode #x1a) do
           (format *debug-io* "[ >  #x1a]  opcode=~4X  ⸺  ~%" opcode)
           (error (make-condition 'runtime-error :opcode opcode
-                                 :position (file-position (vm-script-stream vm))))
+                                 :position (file-position script-stream)))
         else do
-          (setf stop (null (funcall (vm-op-function opcode))))
+          (setf stop (null (funcall (vm-op-function opcode) vm)))
         end
         until stop))
 
 (defun run-one-frame (vm)
-  (loop for channel across (remove-if-not #'channel-is-active-p
+  (loop with script-stream = (rm-script-stream (vm-resource-manager vm))
+        for channel across (remove-if-not #'channel-is-active-p
                                           (vm-channels vm))
         do (format *debug-io* "c: ~S~%" channel)
-           (file-position (rm-script-stream (vm-resource-manager vm)) (channel-pc-offset channel))
+           (file-position script-stream (channel-pc-offset channel))
            (run-channel vm)
-           (setf (channel-pc-offset channel) (file-position (vm-script-stream vm)))))
+           (setf (channel-pc-offset channel) (file-position script-stream))))
 
 ;;;;
 (defun vm-change-part (vm part-id)
