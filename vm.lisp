@@ -41,8 +41,7 @@
           :initarg :is-active)))
 
 (defun channel-is-active-p (channel)
-  (and (channel-state-current (channel-state channel))
-       (/= (channel-pc-offset channel) +vm-inactive-channel+)))
+  (/= (channel-pc-offset channel) +vm-inactive-channel+))
 
 (defstruct vm
   ;;(memlist nil :type (or null (simple-array (or null mem-entry) *)))
