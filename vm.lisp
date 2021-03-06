@@ -155,9 +155,13 @@
     (dotimes (i (vm-num-variables vm))
       (setf (aref variables i) 0))
     (setf (aref variables #x54) #x81
-          (aref variables +vm-variable-random-seed+) (get-universal-time)
+          (aref variables +vm-variable-random-seed+) (ash (get-universal-time) -17)
           ;; (sfxplayer-mark-var (getf vm :player)) (aref variables +variable-mus-mark+)
           (vm-fast-mode vm) nil)))
+
+(defun vm-run (vm)
+  (check-thread-requests vm)
+  (run-one-frame vm))
 
 ;;;;
 (defmacro def-op-function ((vm (name opcode)) &body body)
