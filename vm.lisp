@@ -128,26 +128,23 @@
         end
         until stop))
 
-#|(lambda (c)
-  (and (not (getf (getf c :is-active) :curr-state))
-       (/= (getf c :pc-offset) +vm-inactive-channel+)))|#
-
 (defun run-one-frame (vm)
   (loop for channel across (remove-if-not #'channel-is-active-p
                                           (vm-channels vm))
-        do (file-position (vm-script-stream vm) (channel-pc-offset channel))
-           (run-channel vm)))
+        do (format *debug-io* "c: ~S~%" channel)
+           (file-position (rm-script-stream (vm-resource-manager vm)) (channel-pc-offset channel))
+           (run-channel vm)
+           (setf (channel-pc-offset channel) (file-position (vm-script-stream vm)))))
 
 ;;;;
 (defun vm-change-part (vm part-id)
-  (setf (vm-resources vm) (setup-part part-id (vm-memlist vm))
-        (vm-script-stream vm) (flexi-streams:make-in-memory-input-stream
-                               (resource-data (getf (vm-resources vm) :bytecode)))
-        (channel-pc-offset (aref (vm-channels vm) 0)) 0)
+  (rm-setup-part (vm-resource-manager vm) part-id)
   (loop for c across (vm-channels vm)
         do (setf (channel-pc-offset c) +vm-inactive-channel+
-                 (channel-state-current (channel-state c)) nil))
-  (file-position (vm-script-stream vm) 0)
+                 (channel-requested-pc-offset c) +vm-inactive-channel+
+                 (channel-state-current (channel-state c)) nil
+                 (channel-state-requested (channel-state c)) nil))
+  (setf (channel-pc-offset (aref (vm-channels vm) 0)) 0)
   (values))
 
 (defun vm-init (vm)
