@@ -69,7 +69,7 @@
                                            :initial-contents (loop for i from 0 below *num-channels*
                                                                    collect (make-instance 'channel :id i))
                                            :element-type 'channel))))
-    (rm-setup-part (vm-resource-manager vm) +game-part-1+)
+    (vm-init vm)
     vm))
 
 (defun check-thread-requests (vm)
