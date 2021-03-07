@@ -98,6 +98,12 @@
                      (runtime-error-opcode condition)
                      (runtime-error-position condition)))))
 
+(defun fetch-word (stream)
+  (binary-types:read-binary 'binary-types:u16 stream))
+
+(defun fetch-byte (stream)
+  (binary-types:read-binary 'binary-types:u8 stream))
+
 (defun run-channel (vm)
   (loop with stop = nil
         with script-stream = (rm-script-stream (vm-resource-manager vm))
@@ -162,118 +168,126 @@
   (run-one-frame vm))
 
 ;;;;
-(defmacro def-op-function ((vm (name opcode)) &body body)
+(defmacro def-op-function ((vm stream (name opcode)) &body body)
   (let ((g-func (gensym)))
-    `(let ((,g-func (lambda (,vm)
+    `(let ((,g-func (lambda (,vm ,stream)
                       ,@body)))
        (setf (symbol-function (alexandria:symbolicate ',name '-op)) ,g-func
              (aref *vm-opcodes* ,opcode) ,g-func))))
 
-(def-op-function (vm (cmov #x00))
+(def-op-function (vm stream (cmov #x00))
+  (let ((var-id (fetch-byte stream))
+        (value (fetch-word stream)))
+    (setf (aref (vm-variables vm) var-id) value))
+  nil)
+
+(def-op-function (vm stream (mov #x01))
+  (let ((dst-var (fetch-byte stream))
+        (src-var (fetch-byte stream)))
+    (setf (aref (vm-variables vm) dst-var) (aref (vm-variables vm) src-var)))
+  nil)
+
+(def-op-function (vm stream (add #x02))
+  (let ((dst-var (fetch-byte stream))
+        (src-var (fetch-byte stream)))
+    (incf (aref (vm-variables vm) dst-var) (aref (vm-variables vm) src-var)))
+  nil)
+
+(def-op-function (vm stream (cadd #x03))
+  (let ((var-id (fetch-byte stream))
+        (value (fetch-word stream)))
+    (incf (aref (vm-variables vm) var-id) value))
+  nil)
+
+(def-op-function (vm stream (call #x04))
   (declare (ignore vm))
   nil)
 
-(def-op-function (vm (mov #x01))
+(def-op-function (vm stream (ret #x05))
   (declare (ignore vm))
   nil)
 
-(def-op-function (vm (add #x02))
+(def-op-function (vm stream (pause-thrd #x06))
   (declare (ignore vm))
   nil)
 
-(def-op-function (vm (cadd #x03))
+(def-op-function (vm stream (cond-jmp #x07))
   (declare (ignore vm))
   nil)
 
-(def-op-function (vm (call #x04))
+(def-op-function (vm stream (set-vect #x08))
   (declare (ignore vm))
   nil)
 
-(def-op-function (vm (ret #x05))
+(def-op-function (vm stream (jnz #x09))
   (declare (ignore vm))
   nil)
 
-(def-op-function (vm (pause-thrd #x06))
+(def-op-function (vm stream (cjmp #x0A))
   (declare (ignore vm))
   nil)
 
-(def-op-function (vm (cond-jmp #x07))
+(def-op-function (vm stream (set-pal #x0B))
   (declare (ignore vm))
   nil)
 
-(def-op-function (vm (set-vect #x08))
+(def-op-function (vm stream (reset-thrd #x0C))
   (declare (ignore vm))
   nil)
 
-(def-op-function (vm (jnz #x09))
+(def-op-function (vm stream (slct-fb #x0D))
   (declare (ignore vm))
   nil)
 
-(def-op-function (vm (cjmp #x0A))
+(def-op-function (vm stream (fill-fb #x0E))
   (declare (ignore vm))
   nil)
 
-(def-op-function (vm (set-pal #x0B))
+(def-op-function (vm stream (copy-fb #x0F))
   (declare (ignore vm))
   nil)
 
-(def-op-function (vm (reset-thrd #x0C))
+(def-op-function (vm stream (blit-fb #x10))
   (declare (ignore vm))
   nil)
 
-(def-op-function (vm (slct-fb #x0D))
+(def-op-function (vm stream (kill-thdr #x11))
   (declare (ignore vm))
   nil)
 
-(def-op-function (vm (fill-fb #x0E))
+(def-op-function (vm stream (draw-text #x12))
   (declare (ignore vm))
   nil)
 
-(def-op-function (vm (copy-fb #x0F))
+(def-op-function (vm stream (sub #x13))
   (declare (ignore vm))
   nil)
 
-(def-op-function (vm (blit-fb #x10))
+(def-op-function (vm stream (and #x14))
   (declare (ignore vm))
   nil)
 
-(def-op-function (vm (kill-thdr #x11))
+(def-op-function (vm stream (or #x15))
   (declare (ignore vm))
   nil)
 
-(def-op-function (vm (draw-text #x12))
+(def-op-function (vm stream (shl #x16))
   (declare (ignore vm))
   nil)
 
-(def-op-function (vm (sub #x13))
+(def-op-function (vm stream (shr #x17))
   (declare (ignore vm))
   nil)
 
-(def-op-function (vm (and #x14))
+(def-op-function (vm stream (play-sound #x18))
   (declare (ignore vm))
   nil)
 
-(def-op-function (vm (or #x15))
+(def-op-function (vm stream (load-resc #x19))
   (declare (ignore vm))
   nil)
 
-(def-op-function (vm (shl #x16))
-  (declare (ignore vm))
-  nil)
-
-(def-op-function (vm (shr #x17))
-  (declare (ignore vm))
-  nil)
-
-(def-op-function (vm (play-sound #x18))
-  (declare (ignore vm))
-  nil)
-
-(def-op-function (vm (load-resc #x19))
-  (declare (ignore vm))
-  nil)
-
-(def-op-function (vm (play-music #x1A))
+(def-op-function (vm stream (play-music #x1A))
   (declare (ignore vm))
   nil)
 
