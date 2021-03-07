@@ -51,6 +51,7 @@
   (num-variables *num-variables* :type fixnum)
   (num-channels *num-channels* :type fixnum)
   (variables nil :type (or null (simple-array (signed-byte 16) *)))
+  (stack-calls nil :type (or null (simple-array (signed-byte 16) *)))
   (script-stream nil)
   (channels nil :type (or null (simple-array channel))))
 
@@ -63,6 +64,9 @@
                      :variables (make-array *num-variables*
                                             :initial-element 0
                                             :element-type '(signed-byte 16))
+                     :stack-calls (make-array *num-channels*
+                                              :initial-element 0
+                                              :element-type '(signed-byte 16))
                      :script-stream nil
                      :channels (make-array *num-channels*
                                            :initial-contents (loop for i from 0 below *num-channels*
