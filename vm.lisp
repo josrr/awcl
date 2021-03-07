@@ -114,17 +114,17 @@
 (defun run-channel (vm)
   (loop with stop = nil
         with script-stream = (rm-script-stream (vm-resource-manager vm))
-        for opcode = (binary-types:read-binary 'binary-types:u8 script-stream)
+        for opcode = (fetch-byte script-stream)
         if (> (logand opcode #x80) 0 ) do
           (format *debug-io* "[and #x80]  opcode=~4X  ⸺  ~2X ~2X ~2X~%" opcode
-                  (binary-types:read-binary 'binary-types:u8 script-stream)
-                  (binary-types:read-binary 'binary-types:u8 script-stream)
-                  (binary-types:read-binary 'binary-types:u8 script-stream))
+                  (fetch-byte script-stream)
+                  (fetch-byte script-stream)
+                  (fetch-byte script-stream))
         else if (> (logand opcode #x40) 0) do
           (format *debug-io* "[and #x40]  opcode=~4X  ⸺  ~%" opcode)
-          (let ((off (* 2 (binary-types:read-binary 'binary-types:u16 script-stream)))
+          (let ((off (* 2 (fetch-word script-stream)))
                 (y)
-                (x (binary-types:read-binary 'binary-types:u8 script-stream)))
+                (x (fetch-byte script-stream)))
             (cond ((zerop (logand opcode #x20))
                    )
                   ((= (logand opcode #x10) 1))
