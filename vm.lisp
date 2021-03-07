@@ -53,7 +53,6 @@
   (variables nil :type (or null (simple-array (signed-byte 16) *)))
   (stack-calls nil :type (or null (simple-array (signed-byte 16) *)))
   (stack-pos 0 :type fixnum)
-  (script-stream nil)
   (channels nil :type (or null (simple-array channel))))
 
 (defun vm-create (memlist-path)
@@ -68,7 +67,6 @@
                      :stack-calls (make-array *num-channels*
                                               :initial-element 0
                                               :element-type '(signed-byte 16))
-                     :script-stream nil
                      :channels (make-array *num-channels*
                                            :initial-contents (loop for i from 0 below *num-channels*
                                                                    collect (make-instance 'channel :id i))
