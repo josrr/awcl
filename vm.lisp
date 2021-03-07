@@ -248,26 +248,27 @@
 
 (def-op-function (vm stream (cond-jmp #x0A))
   (let* ((opcode (fetch-byte stream))
+         (condition (logand opcode #x7))
          (b (aref (vm-variables vm) (fetch-byte stream)))
          (a (cond
               ((> (logand opcode #x80) 0)
                (aref (vm-variables vm) (fetch-byte stream)))
               ((> (logand opcode #x40) 0)
                (fetch-word stream))
-              (t (fetch-byte stream)))))
-    (if (funcall (case (logand opcode #x7)
-                   (0 #'=)
-                   (1 #'/=)
-                   (2 #'>)
-                   (3 #'<)
-                   (4 #'<=)
-                   (5 #'>=)
-                   (otherwise
-                    (warn "cond-jmp-op: invalid condition ~d"
-                          (logand opcode #x7))))
-                 b a)
-        (jmp-op vm stream)
-        (fetch-word stream)))
+              (t (fetch-byte stream))))
+         (func (case condition
+                 (0 #'=)
+                 (1 #'/=)
+                 (2 #'>)
+                 (3 #'<)
+                 (4 #'<=)
+                 (5 #'>=)
+                 (otherwise nil))))
+    (if func
+      (if (funcall func b a)
+          (jmp-op vm stream)
+          (fetch-word stream))
+      (warn "cond-jmp-op: invalid condition ~d" condition)))
   nil)
 
 (def-op-function (vm stream (set-pal #x0B))
