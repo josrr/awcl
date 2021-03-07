@@ -52,6 +52,7 @@
   (num-channels *num-channels* :type fixnum)
   (variables nil :type (or null (simple-array (signed-byte 16) *)))
   (stack-calls nil :type (or null (simple-array (signed-byte 16) *)))
+  (stack-pos 0 :type fixnum)
   (script-stream nil)
   (channels nil :type (or null (simple-array channel))))
 
