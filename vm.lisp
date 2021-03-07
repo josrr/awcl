@@ -205,11 +205,20 @@
   nil)
 
 (def-op-function (vm stream (call #x04))
-  (declare (ignore vm))
+  (let ((offset (fetch-word stream)))
+    (setf (aref (vm-stack-calls vm) (vm-stack-pos vm))
+          (file-position stream))
+    (when (= #xFF (vm-stack-pos vm))
+      (error "call: stack overflow"))
+    (incf (vm-stack-pos vm))
+    (file-position stream offset))
   nil)
 
 (def-op-function (vm stream (ret #x05))
-  (declare (ignore vm))
+  (when (zerop (vm-stack-pos vm))
+    (error "call: stack underflow"))
+  (decf (vm-stack-pos vm))
+  (file-position stream (aref (vm-stack-calls vm) (vm-stack-pos vm)))
   nil)
 
 (def-op-function (vm stream (pause-thrd #x06))
