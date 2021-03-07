@@ -134,10 +134,12 @@
                   (t)))
         else if (> opcode #x1a) do
           (format *debug-io* "[ >  #x1a]  opcode=~4X  ⸺  ~%" opcode)
-          (error (make-condition 'runtime-error :opcode opcode
+          (error (make-condition 'runtime-error
+                                 :opcode opcode
                                  :position (file-position script-stream)))
         else do
-          (setf stop (null (funcall (vm-op-function opcode) vm)))
+          (format *debug-io* "Opcode: ~S~%" opcode)
+          (setf stop (funcall (vm-op-function opcode) vm script-stream))
         end
         until stop))
 
