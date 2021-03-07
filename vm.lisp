@@ -275,8 +275,22 @@
   (declare (ignore vm))
   nil)
 
-(def-op-function (vm stream (reset-thrd #x0C))
-  (declare (ignore vm))
+(def-op-function (vm stream (reset-channel #x0C))
+  (let* ((thread-id (fetch-byte stream))
+         (i (a:clamp (fetch-byte stream) 0 (1- *num-channels*))))
+    (if (> i thread-id)
+        (warn "reset-thrd: ec=0x~X (i > thread-id)" #x880)
+        (let ((a (fetch-byte stream))
+              (channels (vm-channels vm)))
+          (cond
+            ((= 2 a)
+             (loop for j from thread-id to i
+                   do (setf (channel-requested-pc-offset (aref channels j))
+                            #xFFFE)))
+            ((< a 2)
+             (loop for j from thread-id to i
+                   do (setf (channel-state-requested (channel-state (aref channels j)))
+                            a)))))))
   nil)
 
 (def-op-function (vm stream (slct-fb #x0D))
