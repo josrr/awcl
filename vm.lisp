@@ -103,8 +103,10 @@
                      (runtime-error-opcode condition)
                      (runtime-error-position condition)))))
 
+;;(declaim (inline fetch-word fetch-byte))
 (defun fetch-word (stream)
-  (binary-types:read-binary 'binary-types:u16 stream))
+  (let ((binary-types:*endian* :big-endian))
+    (binary-types:read-binary 'binary-types:u16 stream)))
 
 (defun fetch-byte (stream)
   (binary-types:read-binary 'binary-types:u8 stream))
