@@ -314,18 +314,28 @@
 
 (def-op-function (vm stream (slct-fb #x0D))
   (declare (ignore vm))
+  (let ((fb-id (fetch-byte stream)))
+   (format *debug-io* "SLCT-FB fb-id=~X~%" fb-id))
   nil)
 
 (def-op-function (vm stream (fill-fb #x0E))
   (declare (ignore vm))
+  (let ((fb-id (fetch-byte stream))
+        (color (fetch-byte stream)))
+    (format *debug-io* "FILL-FB fb-id=~X color=~X~%" fb-id color))
   nil)
 
 (def-op-function (vm stream (copy-fb #x0F))
   (declare (ignore vm))
+  (let ((src-fb (fetch-byte stream))
+        (dst-fb (fetch-byte stream)))
+    (format *debug-io* "COPY-FB src-fb=~X dst-fb=~X~%" src-fb dst-fb))
   nil)
 
 (def-op-function (vm stream (blit-fb #x10))
   (declare (ignore vm))
+  (let ((fb-id (fetch-byte stream)))
+   (format *debug-io* "BLIT-FB fb-id=~X~%" fb-id))
   nil)
 
 (def-op-function (vm stream (kill-thdr #x11))
