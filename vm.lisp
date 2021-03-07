@@ -76,7 +76,7 @@
     (vm-init vm)
     vm))
 
-(defun check-thread-requests (vm)
+(defun check-channel-requests (vm)
   (rm-setup-next-part (vm-resource-manager vm))
   (loop for channel across (vm-channels vm)
         for offset = (channel-requested-pc-offset channel)
@@ -169,7 +169,7 @@
           (vm-fast-mode vm) nil)))
 
 (defun vm-run (vm)
-  (check-thread-requests vm)
+  (check-channel-requests vm)
   (run-one-frame vm))
 
 ;;;;
@@ -232,9 +232,9 @@
   nil)
 
 (def-op-function (vm stream (set-vect #x08))
-  (let ((thread-id (fetch-byte stream))
+  (let ((channel-id (fetch-byte stream))
         (offset (fetch-word stream)))
-    (setf (channel-requested-pc-offset (aref (vm-channels vm) thread-id))
+    (setf (channel-requested-pc-offset (aref (vm-channels vm) channel-id))
           offset))
   nil)
 
@@ -276,19 +276,19 @@
   nil)
 
 (def-op-function (vm stream (reset-channel #x0C))
-  (let* ((thread-id (fetch-byte stream))
+  (let* ((channel-id (fetch-byte stream))
          (i (a:clamp (fetch-byte stream) 0 (1- *num-channels*))))
-    (if (> i thread-id)
-        (warn "reset-thrd: ec=0x~X (i > thread-id)" #x880)
+    (if (> i channel-id)
+        (warn "reset-thrd: ec=0x~X (i > channel-id)" #x880)
         (let ((a (fetch-byte stream))
               (channels (vm-channels vm)))
           (cond
             ((= 2 a)
-             (loop for j from thread-id to i
+             (loop for j from channel-id to i
                    do (setf (channel-requested-pc-offset (aref channels j))
                             #xFFFE)))
             ((< a 2)
-             (loop for j from thread-id to i
+             (loop for j from channel-id to i
                    do (setf (channel-state-requested (channel-state (aref channels j)))
                             a)))))))
   nil)
