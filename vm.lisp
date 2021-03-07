@@ -222,19 +222,28 @@
   nil)
 
 (def-op-function (vm stream (pause-thrd #x06))
-  (declare (ignore vm))
-  nil)
+  (declare (ignore vm stream))
+  t)
 
-(def-op-function (vm stream (cond-jmp #x07))
+(def-op-function (vm stream (jmp #x07))
   (declare (ignore vm))
+  (let ((offset (fetch-word stream)))
+    (file-position stream offset))
   nil)
 
 (def-op-function (vm stream (set-vect #x08))
-  (declare (ignore vm))
+  (let ((thread-id (fetch-byte stream))
+        (offset (fetch-word stream)))
+    (setf (channel-requested-pc-offset (aref (vm-channels vm) thread-id))
+          offset))
   nil)
 
 (def-op-function (vm stream (jnz #x09))
-  (declare (ignore vm))
+  (let ((var-id (fetch-byte stream)))
+    (decf (aref (vm-variables vm) var-id))
+    (if (zerop (aref (vm-variables vm) var-id))
+        (jmp-op vm stream)
+        (fetch-word stream)))
   nil)
 
 (def-op-function (vm stream (cjmp #x0A))
