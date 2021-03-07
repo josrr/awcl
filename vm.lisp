@@ -298,7 +298,7 @@
          (i (a:clamp (fetch-byte stream) 0 (1- *num-channels*))))
     (format *debug-io* "RESET-CHANNEL channel-id=~X i=~X~%" channel-id i)
     (if (> i channel-id)
-        (warn "reset-thrd: ec=0x~X (i > channel-id)" #x880)
+        (warn "reset-channel: ec=0x~X (i > channel-id)" #x880)
         (let ((a (fetch-byte stream))
               (channels (vm-channels vm)))
           (cond
