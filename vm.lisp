@@ -297,13 +297,14 @@
   nil)
 
 (def-op-function (vm stream (set-pal #x0B))
-  (declare (ignore vm stream))
-  (format *debug-io* "SET-PAL~%")
+  (declare (ignore vm))
+  (let ((pallete-id (fetch-word stream)))
+    (format *debug-io* "SET-PAL pallete-id=0x~X~%" pallete-id))
   nil)
 
 (def-op-function (vm stream (reset-channel #x0C))
-  (let* ((channel-id (fetch-byte stream))
-         (i (a:clamp (fetch-byte stream) 0 (1- *num-channels*))))
+  (let ((channel-id (fetch-byte stream))
+        (i (a:clamp (fetch-byte stream) 0 (1- *num-channels*))))
     (format *debug-io* "RESET-CHANNEL channel-id=~D i=~D~%" channel-id i)
     (if (> i channel-id)
         (warn "reset-channel: ec=0x~X (i > channel-id)" #x880)
