@@ -136,19 +136,19 @@
                                  :opcode opcode
                                  :position (file-position script-stream)))
         else do
-          (format *debug-io* "Opcode: ~S~%" opcode)
+          (format *debug-io* "Opcode: ~X~%" opcode)
           (setf stop (funcall (vm-op-function opcode) vm script-stream))
         end
         until stop))
 
 (defun run-one-frame (vm)
   (loop with script-stream = (rm-script-stream (vm-resource-manager vm))
-        for channel across (remove-if-not #'channel-is-active-p
-                                          (vm-channels vm))
-        do (format *debug-io* "c: ~S~%" channel)
-           (file-position script-stream (channel-pc-offset channel))
-           (run-channel vm)
-           (setf (channel-pc-offset channel) (file-position script-stream))))
+        for channel across (vm-channels vm)
+        when (channel-is-active-p channel)
+          do (format *debug-io* "channel activo: ~S~%" channel)
+             (file-position script-stream (channel-pc-offset channel))
+             (run-channel vm)
+             (setf (channel-pc-offset channel) (file-position script-stream))))
 
 ;;;;
 (defun vm-change-part (vm part-id)
