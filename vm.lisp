@@ -282,9 +282,9 @@
                  (0 #'=)
                  (1 #'/=)
                  (2 #'>)
-                 (3 #'<)
-                 (4 #'<=)
-                 (5 #'>=)
+                 (3 #'>=)
+                 (4 #'<)
+                 (5 #'<=)
                  (otherwise nil))))
     (format *debug-io*
             "COND-JMP opcode=0x~X condition=0x~X func=~S b=0x~X a=0x~X~%"
