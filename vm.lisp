@@ -337,8 +337,8 @@
   nil)
 
 (def-op-function (vm stream (kill-channel #x11))
-  (declare (ignore vm))
-  (file-position stream #xFFFF)
+  (declare (ignore vm stream))
+  ;;(file-position stream #xFFFF)
   t)
 
 (def-op-function (vm stream (draw-text #x12))
