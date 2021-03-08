@@ -233,8 +233,9 @@
   (when (zerop (vm-stack-pos vm))
     (error "call: stack underflow"))
   (decf (vm-stack-pos vm))
-  (format *debug-io* "RET offset=~X~%" (vm-stack-pos vm))
-  (file-position stream (aref (vm-stack-calls vm) (vm-stack-pos vm)))
+  (let ((stack (vm-stack-calls vm)))
+    (format *debug-io* "RET offset=~X~%" (aref stack (vm-stack-pos vm)))
+    (file-position stream (aref stack (vm-stack-pos vm))))
   nil)
 
 (def-op-function (vm stream (pause-channel #x06))
