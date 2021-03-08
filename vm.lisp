@@ -121,30 +121,48 @@
   (loop with stop = nil
         with script-stream = (rm-script-stream (vm-resource-manager vm))
         for opcode = (fetch-byte script-stream)
-        if (> (logand opcode #x80) 0 ) do
-          (format *debug-io* "[and #x80]  opcode=~4X  ⸺  ~2X ~2X ~2X~%" opcode
+        if (= (ldb (byte 1 7) opcode) 1) do
+          (format *debug-io* "[#x80] opcode=0x~4,'0X ⸺ 0x~2X 0x~2X 0x~2X~%" opcode
                   (fetch-byte script-stream)
                   (fetch-byte script-stream)
                   (fetch-byte script-stream))
-        else if (> (logand opcode #x40) 0) do
-          (format *debug-io* "[and #x40]  opcode=~4X  ⸺  ~%" opcode)
+        else if (= (ldb (byte 1 6) opcode) 1) do
+          (format *debug-io* "[0x40] opcode=0x~4,'0X ⸺ ~%" opcode)
           (let ((off (* 2 (fetch-word script-stream)))
                 (y)
-                (x (fetch-byte script-stream)))
-            (cond ((zerop (logand opcode #x20))
-                   )
-                  ((= (logand opcode #x10) 1))
-                  )
-            (cond ((= (logand opcode #x10) 1)
-                   )
-                  (t)))
+                (x (fetch-byte script-stream))
+                (zoom))
+            (setf (rm-use-seg-video2 (vm-resource-manager vm)) nil)
+            (if (zerop (logand opcode #x20))
+                (setf x (if (zerop (logand opcode #x10))
+                            (logior (ash x 8) (fetch-byte script-stream))
+                            (aref (vm-variables vm) x)))
+                (when (= (logand opcode #x10) 1)
+                  (incf x #x100)))
+            (setf y (fetch-byte script-stream))
+            (when (zerop (logand opcode #x8))
+              (setf y (if (zerop (logand opcode #x4))
+                          (logior (ash y 8) (fetch-byte script-stream))
+                          (aref (vm-variables vm) y))))
+            (setf zoom (fetch-byte script-stream))
+            (if (zerop (logand opcode #x2))
+                (setf zoom (if (zerop (logand opcode #x1))
+                               (prog1 #x40
+                                 (file-position script-stream
+                                                (1- (file-position script-stream))))
+                               (aref (vm-variables vm) zoom)))
+                (when (= (logand opcode #x1) 1)
+                  (setf (rm-use-seg-video2 (vm-resource-manager vm)) t)
+                  (file-position script-stream
+                                 (1- (file-position script-stream)))
+                  (setf zoom #x40))))
         else if (> opcode #x1a) do
           (format *debug-io* "[ >  #x1a]  opcode=~4X  ⸺  ~%" opcode)
           (error (make-condition 'runtime-error
                                  :opcode opcode
                                  :position (file-position script-stream)))
         else do
-          (format *debug-io* "Opcode: ~X~%" opcode)
+          (format *debug-io* "Opcode: 0x~X~%" opcode)
           (setf stop (funcall (vm-op-function opcode) vm script-stream))
         end
         until stop))
