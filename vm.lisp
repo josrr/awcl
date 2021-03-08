@@ -193,34 +193,34 @@
 (def-op-function (vm stream (cmov #x00))
   (let ((var-id (fetch-byte stream))
         (value (fetch-word stream)))
-    (format *debug-io* "CMOV var-id=~X value=~X~%" var-id value)
+    (format *debug-io* "CMOV var-id=~D value=0x~X~%" var-id value)
     (setf (aref (vm-variables vm) var-id) value))
   nil)
 
 (def-op-function (vm stream (mov #x01))
   (let ((dst-var (fetch-byte stream))
         (src-var (fetch-byte stream)))
-    (format *debug-io* "MOV dst-var=~X src-var=~X~%" dst-var src-var)
+    (format *debug-io* "MOV dst-var=~D src-var=~D~%" dst-var src-var)
     (setf (aref (vm-variables vm) dst-var) (aref (vm-variables vm) src-var)))
   nil)
 
 (def-op-function (vm stream (add #x02))
   (let ((dst-var (fetch-byte stream))
         (src-var (fetch-byte stream)))
-    (format *debug-io* "ADD dst-var=~X src-var=~X~%" dst-var src-var)
+    (format *debug-io* "ADD dst-var=~D src-var=~D~%" dst-var src-var)
     (incf (aref (vm-variables vm) dst-var) (aref (vm-variables vm) src-var)))
   nil)
 
 (def-op-function (vm stream (cadd #x03))
   (let ((var-id (fetch-byte stream))
         (value (fetch-word stream)))
-    (format *debug-io* "CADD var-id=~X value=~X~%" var-id value)
+    (format *debug-io* "CADD var-id=~D value=0x~X~%" var-id value)
     (incf (aref (vm-variables vm) var-id) value))
   nil)
 
 (def-op-function (vm stream (call #x04))
   (let ((offset (fetch-word stream)))
-    (format *debug-io* "CALL offset=~X~%" offset)
+    (format *debug-io* "CALL offset=0x~X~%" offset)
     (setf (aref (vm-stack-calls vm) (vm-stack-pos vm))
           (file-position stream))
     (when (= #xFF (vm-stack-pos vm))
@@ -234,7 +234,7 @@
     (error "call: stack underflow"))
   (decf (vm-stack-pos vm))
   (let ((stack (vm-stack-calls vm)))
-    (format *debug-io* "RET offset=~X~%" (aref stack (vm-stack-pos vm)))
+    (format *debug-io* "RET offset=0x~X~%" (aref stack (vm-stack-pos vm)))
     (file-position stream (aref stack (vm-stack-pos vm))))
   nil)
 
@@ -246,14 +246,14 @@
 (def-op-function (vm stream (jmp #x07))
   (declare (ignore vm))
   (let ((offset (fetch-word stream)))
-    (format *debug-io* "JMP offset=~X~%" offset)
+    (format *debug-io* "JMP offset=0x~X~%" offset)
     (file-position stream offset))
   nil)
 
 (def-op-function (vm stream (set-vect #x08))
   (let ((channel-id (fetch-byte stream))
         (offset (fetch-word stream)))
-    (format *debug-io* "SET-VECT channel-id=~X  offset=~X~%"
+    (format *debug-io* "SET-VECT channel-id=~D  offset=0x~X~%"
             channel-id offset)
     (setf (channel-requested-pc-offset (aref (vm-channels vm) channel-id))
           offset))
@@ -261,7 +261,7 @@
 
 (def-op-function (vm stream (jnz #x09))
   (let ((var-id (fetch-byte stream)))
-    (format *debug-io* "JNZ var-id=~X~%" var-id)
+    (format *debug-io* "JNZ var-id=~D~%" var-id)
     (decf (aref (vm-variables vm) var-id))
     (if (zerop (aref (vm-variables vm) var-id))
         (jmp-op vm stream)
@@ -286,8 +286,9 @@
                  (4 #'<=)
                  (5 #'>=)
                  (otherwise nil))))
-    (format *debug-io* "COND-JMP opcode=~X condition=~X func=~S~%"
-            opcode condition func)
+    (format *debug-io*
+            "COND-JMP opcode=0x~X condition=0x~X func=~S b=0x~X a=0x~X~%"
+            opcode condition func b a)
     (if func
       (if (funcall func b a)
           (jmp-op vm stream)
@@ -303,7 +304,7 @@
 (def-op-function (vm stream (reset-channel #x0C))
   (let* ((channel-id (fetch-byte stream))
          (i (a:clamp (fetch-byte stream) 0 (1- *num-channels*))))
-    (format *debug-io* "RESET-CHANNEL channel-id=~X i=~X~%" channel-id i)
+    (format *debug-io* "RESET-CHANNEL channel-id=~D i=~D~%" channel-id i)
     (if (> i channel-id)
         (warn "reset-channel: ec=0x~X (i > channel-id)" #x880)
         (let ((a (fetch-byte stream))
@@ -322,32 +323,32 @@
 (def-op-function (vm stream (slct-fb #x0D))
   (declare (ignore vm))
   (let ((fb-id (fetch-byte stream)))
-   (format *debug-io* "SLCT-FB fb-id=~X~%" fb-id))
+   (format *debug-io* "SLCT-FB fb-id=~D~%" fb-id))
   nil)
 
 (def-op-function (vm stream (fill-fb #x0E))
   (declare (ignore vm))
   (let ((fb-id (fetch-byte stream))
         (color (fetch-byte stream)))
-    (format *debug-io* "FILL-FB fb-id=~X color=~X~%" fb-id color))
+    (format *debug-io* "FILL-FB fb-id=~D color=0x~X~%" fb-id color))
   nil)
 
 (def-op-function (vm stream (copy-fb #x0F))
   (declare (ignore vm))
   (let ((src-fb (fetch-byte stream))
         (dst-fb (fetch-byte stream)))
-    (format *debug-io* "COPY-FB src-fb=~X dst-fb=~X~%" src-fb dst-fb))
+    (format *debug-io* "COPY-FB src-fb=~D dst-fb=~D~%" src-fb dst-fb))
   nil)
 
 (def-op-function (vm stream (blit-fb #x10))
   (declare (ignore vm))
   (let ((fb-id (fetch-byte stream)))
-    (format *debug-io* "BLIT-FB fb-id=~X~%" fb-id))
+    (format *debug-io* "BLIT-FB fb-id=~D~%" fb-id))
   nil)
 
 (def-op-function (vm stream (kill-channel #x11))
   (declare (ignore vm stream))
-  ;;(file-position stream #xFFFF)
+  ;;(setf (channel-pc-offset (vm-channels vm)) #xFFFF)
   t)
 
 (def-op-function (vm stream (draw-text #x12))
@@ -356,7 +357,7 @@
         (x (fetch-byte stream))
         (y (fetch-byte stream))
         (color (fetch-byte stream)))
-    (format *debug-io* "DRAW-TEXT string-id=~X x=~X y=~X color=~X~%"
+    (format *debug-io* "DRAW-TEXT string-id=~D x=~D y=~D color=0x~X~%"
             string-id x y color))
   nil)
 
@@ -364,7 +365,7 @@
   (let ((dst-var (fetch-byte stream))
         (src-var (fetch-byte stream))
         (variables (vm-variables vm)))
-    (format *debug-io* "SUB dst-var=~X src-var=~X~%" dst-var src-var)
+    (format *debug-io* "SUB dst-var=~D src-var=~D~%" dst-var src-var)
     (decf (aref variables dst-var) (aref variables src-var)))
   nil)
 
@@ -372,7 +373,7 @@
   (let ((var-id (fetch-byte stream))
         (value (fetch-word stream))
         (variables (vm-variables vm)))
-    (format *debug-io* "AND var-id=~X value=~X~%" var-id value)
+    (format *debug-io* "AND var-id=~D value=0x~X~%" var-id value)
     (setf (aref variables var-id) (logand (aref variables var-id) value)))
   nil)
 
@@ -380,7 +381,7 @@
   (let ((var-id (fetch-byte stream))
         (value (fetch-word stream))
         (variables (vm-variables vm)))
-    (format *debug-io* "OR var-id=~X value=~X~%" var-id value)
+    (format *debug-io* "OR var-id=~D value=0x~X~%" var-id value)
     (setf (aref variables var-id) (logior (aref variables var-id) value)))
   nil)
 
@@ -388,7 +389,7 @@
   (let ((var-id (fetch-byte stream))
         (value (fetch-word stream))
         (variables (vm-variables vm)))
-    (format *debug-io* "SHL var-id=~X value=~X~%" var-id value)
+    (format *debug-io* "SHL var-id=~D value=0x~X~%" var-id value)
     (setf (aref variables var-id) (ash (aref variables var-id) value)))
   nil)
 
@@ -396,7 +397,7 @@
   (let ((var-id (fetch-byte stream))
         (value (fetch-word stream))
         (variables (vm-variables vm)))
-    (format *debug-io* "SHR var-id=~X value=~X~%" var-id value)
+    (format *debug-io* "SHR var-id=~D value=0x~X~%" var-id value)
     (setf (aref variables var-id) (ash (aref variables var-id) (- value))))
   nil)
 
@@ -406,14 +407,14 @@
         (freq (fetch-byte stream))
         (vol (fetch-byte stream))
         (channel (fetch-byte stream)))
-    (format *debug-io* "PLAY-SOUND res-id=~X freq=~X vol=~X channel=~X~%"
+    (format *debug-io* "PLAY-SOUND res-id=~D freq=~D vol=~D channel=~D~%"
             res-id freq vol channel))
   nil)
 
 (def-op-function (vm stream (load-resc #x19))
   (declare (ignore vm))
   (let ((res-id (fetch-word stream)))
-    (format *debug-io* "LOAD-RESC res-id=~X~%" res-id)
+    (format *debug-io* "LOAD-RESC res-id=~D~%" res-id)
     #|(if (zerop res-id)
         (progn
           t)
@@ -425,7 +426,7 @@
   (let ((res-id (fetch-word stream))
         (delay (fetch-byte stream))
         (pos (fetch-byte stream)))
-    (format *debug-io* "PLAY-MUSIC res-id=~X delay=~X pos=~X~%"
+    (format *debug-io* "PLAY-MUSIC res-id=~D delay=~D pos=~D~%"
             res-id delay pos))
   nil)
 
