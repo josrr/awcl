@@ -40,6 +40,14 @@
           :initform (make-instance 'channel-state)
           :initarg :is-active)))
 
+(defmethod print-object ((object channel) stream)
+  (print-unreadable-object (object stream :type t :identity t)
+    (format stream
+            "id=~2,'0D pc-offset=0x~4,'0X requested-pc-offset=0x~4,'0X"
+            (channel-id object)
+            (channel-pc-offset object)
+            (channel-requested-pc-offset object))))
+
 (defun channel-is-active-p (channel)
   (/= (channel-pc-offset channel) +vm-inactive-channel+))
 
