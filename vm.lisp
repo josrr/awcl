@@ -105,7 +105,7 @@
   ((position :initarg :position :reader runtime-error-position)
    (opcode :initarg :opcode :reader runtime-error-opcode))
   (:report (lambda (condition stream)
-             (format stream "Error runing bytecode opcode ~S in position ~D."
+             (format stream "Error runing bytecode opcode 0x~X in position ~D."
                      (runtime-error-opcode condition)
                      (runtime-error-position condition)))))
 
