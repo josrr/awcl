@@ -424,7 +424,7 @@
 (def-op-function (vm stream (play-music #x1A))
   (declare (ignore vm))
   (let ((res-id (fetch-word stream))
-        (delay (fetch-byte stream))
+        (delay (fetch-word stream))
         (pos (fetch-byte stream)))
     (format *debug-io* "PLAY-MUSIC res-id=~D delay=~D pos=~D~%"
             res-id delay pos))
