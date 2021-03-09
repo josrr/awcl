@@ -281,7 +281,7 @@
   (let ((var-id (fetch-byte stream)))
     (format *debug-io* "JNZ var-id=~D~%" var-id)
     (decf (aref (vm-variables vm) var-id))
-    (if (zerop (aref (vm-variables vm) var-id))
+    (if (not (zerop (aref (vm-variables vm) var-id)))
         (jmp-op vm stream)
         (fetch-word stream)))
   nil)
