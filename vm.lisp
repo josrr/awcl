@@ -367,6 +367,7 @@
 
 (def-op-function (vm stream (kill-channel #x11))
   (declare (ignore vm stream))
+  (format *debug-io* "kill-channel~%")
   ;;(setf (channel-pc-offset (vm-channels vm)) #xFFFF)
   t)
 
