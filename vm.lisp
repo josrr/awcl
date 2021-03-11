@@ -61,9 +61,10 @@
   (variables nil :type (or null (simple-array (signed-byte 16) *)))
   (stack-calls nil :type (or null (simple-array (signed-byte 16) *)))
   (stack-pos 0 :type fixnum)
-  (channels nil :type (or null (simple-array channel))))
+  (channels nil :type (or null (simple-array channel)))
+  (frame nil))
 
-(defun vm-create (memlist-path)
+(defun vm-create (memlist-path frame)
   (let ((vm (make-vm :fast-mode nil
                      :resource-manager (make-instance 'resource-manager
                                                       :memlist (memlist-create memlist-path))
@@ -78,7 +79,8 @@
                      :channels (make-array *num-channels*
                                            :initial-contents (loop for i from 0 below *num-channels*
                                                                    collect (make-instance 'channel :id i))
-                                           :element-type 'channel))))
+                                           :element-type 'channel)
+                     :frame frame)))
     (vm-init vm)
     vm))
 
