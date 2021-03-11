@@ -257,11 +257,12 @@
    (use-seg-video2 :accessor rm-use-seg-video2
                    :initform nil)))
 
-(defun rm-load-resources (rm)
-  (loop initially (setf (rm-video-stream rm) nil
-                        (rm-script-stream rm) nil
-                        (rm-palette-stream rm) nil
-                        (rm-cinematic-stream rm) nil)
+(defun rm-load-resources (rm &optional (first-time t))
+  (loop initially (when first-time
+                    (setf (rm-video-stream rm) nil
+                          (rm-script-stream rm) nil
+                          (rm-palette-stream rm) nil
+                          (rm-cinematic-stream rm) nil))
         for entry across (sort (remove-if #'(lambda (e)
                                               (/= (mem-entry-state e)
                                                   +mem-entry-state-load-me+))
