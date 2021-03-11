@@ -194,6 +194,10 @@
     (setf (aref variables #x54) #x81
           (aref variables +vm-variable-random-seed+) (ash (get-universal-time) -17)
           ;; (sfxplayer-mark-var (getf vm :player)) (aref variables +variable-mus-mark+)
+          (aref variables #xBC) #x10
+          (aref variables #xC6) #x80
+          (aref variables #xF2) 4000
+          (aref variables #xDC) 33
           (vm-fast-mode vm) nil)))
 
 (defun vm-run (vm)
