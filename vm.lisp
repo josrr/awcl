@@ -432,9 +432,11 @@
   nil)
 
 (def-op-function (vm stream (load-resc #x19))
-  (declare (ignore vm))
   (let ((res-id (fetch-word stream)))
     (format *debug-io* "LOAD-RESC res-id=~D~%" res-id)
+    (if (< res-id (length (rm-memlist (vm-resource-manager vm))))
+        (rm-load-memory-entry (vm-resource-manager vm) res-id)
+        (rm-load-part (vm-resource-manager vm) res-id))
     #|(if (zerop res-id)
         (progn
           t)
