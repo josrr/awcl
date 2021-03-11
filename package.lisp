@@ -1,5 +1,5 @@
 ;;;; package.lisp
 
 (defpackage #:awcl
-  (:use #:cl)
+  (:use #:clim #:clim-lisp #:mcclim-render)
   (:local-nicknames (#:a #:alexandria)))
