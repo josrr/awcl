@@ -311,6 +311,18 @@
               ;;(rm-seg-cinematic rm) (mem-entry-buffer video-1-entry)
               (rm-current-part-id rm) part-id)))))
 
+(defun rm-load-part (rm part-id)
+  (assert (or (>= part-id +game-part-first+)
+              (<= part-id +game-part-last+)))
+  (setf (rm-next-part-id rm) part-id)
+  t)
+
+(defun rm-load-memory-entry (rm entry-id)
+  (let ((entry (aref (rm-memlist rm) entry-id)))
+    (when (= (mem-entry-state entry) +mem-entry-state-not-needed+)
+      (setf (mem-entry-state entry) +mem-entry-state-load-me+)
+      (rm-load-resources rm nil))))
+
 (defun rm-setup-next-part (rm)
   (with-slots (next-part-id) rm
     (when (/= 0 next-part-id)
