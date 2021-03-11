@@ -112,7 +112,7 @@
               (unpack-ctx-data-size ctx) (unpack-ctx-crc ctx) (unpack-ctx-chk ctx)
               (type-of obuf) packed-size (file-position s))
       (labels ((rcr (cf)
-                 (prog1 (> (logand 1 (unpack-ctx-chk ctx)) 0)
+                 (prog1 (= (ldb (byte 1 0) (unpack-ctx-chk ctx)) 1)
                    (setf (unpack-ctx-chk ctx) (ash (unpack-ctx-chk ctx) -1))
                    (when cf
                      (setf (unpack-ctx-chk ctx) (logior (unpack-ctx-chk ctx) #x80000000)))))
