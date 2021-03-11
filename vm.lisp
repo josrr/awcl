@@ -346,16 +346,17 @@
   nil)
 
 (def-op-function (vm stream (slct-fb #x0D))
-  (declare (ignore vm))
-  (let ((fb-id (fetch-byte stream)))
-   (format *debug-io* "SLCT-FB fb-id=~D~%" fb-id))
+  (let ((fb-id (fetch-byte stream))
+        (frame (vm-frame vm)))
+    (format *debug-io* "SLCT-FB fb-id=~D~%" fb-id)
+    (setf (awcl-currfb-1 frame) (awcl-get-fb frame fb-id)))
   nil)
 
 (def-op-function (vm stream (fill-fb #x0E))
-  (declare (ignore vm))
   (let ((fb-id (fetch-byte stream))
         (color (fetch-byte stream)))
-    (format *debug-io* "FILL-FB fb-id=~D color=0x~X~%" fb-id color))
+    (format *debug-io* "FILL-FB fb-id=~D color=0x~X~%" fb-id color)
+    (awcl-fill-page (vm-frame vm) fb-id color))
   nil)
 
 (def-op-function (vm stream (copy-fb #x0F))
