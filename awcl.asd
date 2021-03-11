@@ -6,9 +6,9 @@
   :license  "GPLv3"
   :version "0.0.1"
   :serial t
-  :depends-on (:alexandria :binary-types :flexi-streams)
+  :depends-on (:alexandria :binary-types :flexi-streams :mcclim)
   :components ((:file "package")
-               (:file "awcl")
                (:file "resources")
                (:file "parts")
-               (:file "vm")))
+               (:file "vm")
+               (:file "awcl")))
