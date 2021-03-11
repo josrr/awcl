@@ -52,13 +52,15 @@
 (defmethod print-object ((object mem-entry) stream)
   (print-unreadable-object (object stream :type t :identity t)
     (format stream
-            "BANK~2,'0X (:BANK-OFFSET ~8X) (:PACKETP ~3@S) (:STATE ~3D) (:RANK ~3D) (:TYPE ~2,'0X)"
+            "BANK~2,'0X (:TYPE ~2,'0X) (:SIZE ~5D) (:PACKED-SIZE ~6D) (:PACKETP ~3@S) (:BANK-OFFSET ~8X) (:STATE ~3D) (:RANK ~3D)"
             (mem-entry-bank-id object)
-            (mem-entry-bank-offset object)
+            (mem-entry-res-type object)
+            (mem-entry-size object)
+            (mem-entry-packed-size object)
             (mem-entry-packetp object)
+            (mem-entry-bank-offset object)
             (mem-entry-state object)
-            (mem-entry-rank-num object)
-            (mem-entry-res-type object))))
+            (mem-entry-rank-num object))))
 
 (defun mem-entry-packetp (entry)
   (/= (mem-entry-size entry) (mem-entry-packed-size entry)))
