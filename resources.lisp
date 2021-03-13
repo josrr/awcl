@@ -245,8 +245,8 @@
                   :initform nil)
    (video-stream :accessor rm-video-stream
                  :initform nil)
-   (palette-stream :accessor rm-palette-stream
-                   :initform nil)
+   (palette :accessor rm-palette
+            :initform nil)
    (cinematic-stream :accessor rm-cinematic-stream
                      :initform nil)
    ;;(seg-palettes :accessor rm-seg-palettes :initform nil)
@@ -261,7 +261,7 @@
   (loop initially (when first-time
                     (setf (rm-video-stream rm) nil
                           (rm-script-stream rm) nil
-                          (rm-palette-stream rm) nil
+                          (rm-palette rm) nil
                           (rm-cinematic-stream rm) nil))
         for entry across (sort (remove-if #'(lambda (e)
                                               (/= (mem-entry-state e)
@@ -283,9 +283,8 @@
                ((bytecode) (setf (rm-script-stream rm)
                                  (flexi-streams:make-in-memory-input-stream
                                   (resource-data res))))
-               ((palette) (setf (rm-palette-stream rm)
-                                (flexi-streams:make-in-memory-input-stream
-                                 (resource-data res)))))))
+               ((palette) (setf (rm-palette rm)
+                                (resource-data res))))))
 
 (defun rm-setup-part (rm part-id &optional (memlist-parts *memlist-parts*))
   (assert (or (>= part-id +game-part-first+)
