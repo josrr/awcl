@@ -62,6 +62,7 @@
   (stack-calls nil :type (or null (simple-array (signed-byte 16) *)))
   (stack-pos 0 :type fixnum)
   (channels nil :type (or null (simple-array channel)))
+  (last-time-stamp 0)
   (frame nil))
 
 (defun vm-create (memlist-path frame)
