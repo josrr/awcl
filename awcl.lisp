@@ -11,17 +11,28 @@
   ())
 
 (define-application-frame awcl ()
-  ((width :initform *canvas-width*)
-   (height :initform *canvas-height*)
+  (;;(width :initform *canvas-width*)
+   ;;(height :initform *canvas-height*)
    (vm :initform nil :accessor awcl-vm)
-   (fb-array :initform (make-array 4 :initial-contents
-                                   (loop repeat 4
-                                         collect (make-image *canvas-width*
-                                                             *canvas-height*)))
-             :accessor awcl-fb-array)
+   (fb-size :initform (/ (* *canvas-width* *canvas-height*) 2)
+            :accessor awcl-fb-size)
+   (fb-list :initform (loop repeat 4
+                            collect (make-array (/ (* *canvas-width*
+                                                      *canvas-height*)
+                                                   2)
+                                                :element-type '(unsigned-byte 8)
+                                                :initial-element 0))
+            :accessor awcl-fb-list)
    (currfb-1 :initform nil :accessor awcl-currfb-1)
    (currfb-2 :initform nil :accessor awcl-currfb-2)
    (currfb-3 :initform nil :accessor awcl-currfb-3)
+   (palette-id :initform 0 :accessor awcl-palette-id)
+   (palette-id-requested :initform nil :accessor awcl-palette-id-requested)
+   (palette :initform (make-array 16 :element-type '(unsigned-byte 32)
+                                     :initial-element 0)
+            :accessor awcl-palette)
+   (image :initform (make-image *canvas-width* *canvas-height*)
+          :accessor awcl-image)
    (play-thread :initform nil :accessor awcl-play-thread)
    (playing :initform nil :accessor awcl-playing))
   (:pane (make-pane 'canvas-pane
