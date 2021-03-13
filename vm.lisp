@@ -322,9 +322,10 @@
   nil)
 
 (def-op-function (vm stream (set-pal #x0B))
-  (declare (ignore vm))
   (let ((pallete-id (fetch-word stream)))
-    (format *debug-io* "SET-PAL pallete-id=0x~X~%" pallete-id))
+    (format *debug-io* "SET-PAL pallete-id=0x~X~%" pallete-id)
+    (setf (awcl-palette-id-requested (vm-frame vm))
+          (ash pallete-id -8)))
   nil)
 
 (def-op-function (vm stream (reset-channel #x0C))
