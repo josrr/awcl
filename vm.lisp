@@ -120,17 +120,21 @@
 (defun fetch-byte (stream)
   (binary-types:read-binary 'binary-types:u8 stream))
 
+(defun vm-draw-polygon (vm offset x y)
+  (format *debug-io* "draw-polygon offset=~D x=~3D y=~3D~%" offset x y)
+  (awcl-draw-polygon (vm-frame vm) offset #xFF #x40 x y))
+
 (defun run-channel (vm)
   (loop with stop = nil
         with script-stream = (rm-script-stream (vm-resource-manager vm))
         for opcode = (fetch-byte script-stream)
         if (= (ldb (byte 1 7) opcode) 1) do
-          (format *debug-io* "[#x80] opcode=0x~4,'0X ⸺ 0x~2X 0x~2X 0x~2X~%" opcode
-                  (fetch-byte script-stream)
-                  (fetch-byte script-stream)
-                  (fetch-byte script-stream))
+          (format *debug-io* "[0x80] opcode=0x~4,'0X~%" opcode)
+          (vm-draw-polygon vm (mod (* 2 (logior (ash opcode 8) (fetch-byte script-stream))) (expt 2 16))
+                           (fetch-byte script-stream)
+                           (fetch-byte script-stream))
         else if (= (ldb (byte 1 6) opcode) 1) do
-          (format *debug-io* "[0x40] opcode=0x~4,'0X ⸺ ~%" opcode)
+          (format *debug-io* "[0x40] opcode=0x~4,'0X~%" opcode)
           (let ((off (* 2 (fetch-word script-stream)))
                 (y)
                 (x (fetch-byte script-stream))
