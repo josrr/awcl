@@ -131,6 +131,36 @@
           (awcl-palette-id-requested frame) nil))
   (awcl-update-canvas frame))
 
+(defclass awcl-polygon ()
+  ((width :initarg :width :reader awcl-polygon-width)
+   (height :initarg :height :reader awcl-polygon-height)
+   (points :initarg :points :accessor awcl-polygon-points)))
+
+(defun read-polygon (stream zoom)
+  (let ((poly (make-instance 'awcl-polygon
+                             :width (/ (* (fetch-byte stream) zoom) 64)
+                             :height (/ (* (fetch-byte stream) zoom) 64)))
+        (num-points (fetch-byte stream)))
+    ;;(make-polygon* )
+    (setf (awcl-polygon-points poly)
+          (loop repeat num-points
+                collect (make-point (/ (* (fetch-byte stream) zoom) 64)
+                                    (/ (* (fetch-byte stream) zoom) 64))))
+    poly))
+
+(defun awcl-draw-polygon (frame offset color zoom x y)
+  (let ((stream (rm-cinematic-stream (vm-resource-manager (awcl-vm frame)))))
+    (file-position stream offset)
+    (let ((i (fetch-byte stream)))
+      (cond
+        ((> i #xC0) ; 192
+         (when (ldb (byte 1 7) color)
+           (setf color (logand i #x3F)))
+         (let ((polygon (read-polygon stream zoom)))
+           (format *debug-io* "~S~%" polygon)))
+        (t
+         t)))))
+
 (defun run ()
   (setf *frame* (make-application-frame 'awcl)
         (awcl-vm *frame*) (vm-create *memlist-bin-path* *frame*)
