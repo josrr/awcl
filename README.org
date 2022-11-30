@@ -5,7 +5,16 @@ Another world/Out of this world virtual machine interpreter.
 
 This is a work in progress.
 
+To run the project change the value of =AWCL:*MEMLIST-BIN-PATH*= to
+the path name of your =memlist.bin= file and call the function
+=AWCL:RUN=; something like this:
+
+#+BEGIN_SRC lisp
+  (ql:quickload "awcl")
+  (let ((awcl:*memlist-bin-path* #p"./data/aw01/MEMLIST.BIN"))
+    (bt:make-thread #'awcl:run))
+#+END_SRC
+
 * License
 
 GPLv3
-
