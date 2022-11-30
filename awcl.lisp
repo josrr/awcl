@@ -16,21 +16,34 @@
    (vm :initform nil :accessor awcl-vm)
    (fb-size :initform (/ (* *canvas-width* *canvas-height*) 2)
             :accessor awcl-fb-size)
-   (fb-list :initform (loop repeat 4
-                            collect (make-array (/ (* *canvas-width*
-                                                      *canvas-height*)
-                                                   2)
-                                                :element-type '(unsigned-byte 8)
-                                                :initial-element 0))
-            :accessor awcl-fb-list)
+   #|(fb-list :initform (loop repeat 4
+                            collect (make-image *canvas-width*
+                                                *canvas-height*))
+              :accessor awcl-fb-list)|#
+   (fb-list :accessor awcl-fb-list)
+   (pixmaps :accessor awcl-pixmaps)
    (currfb-1 :initform nil :accessor awcl-currfb-1)
    (currfb-2 :initform nil :accessor awcl-currfb-2)
    (currfb-3 :initform nil :accessor awcl-currfb-3)
+   (currpix-1 :initform nil :accessor awcl-currpix-1)
+   (currpix-2 :initform nil :accessor awcl-currpix-2)
+   (currpix-3 :initform nil :accessor awcl-currpix-3)
    (palette-id :initform 0 :accessor awcl-palette-id)
    (palette-id-requested :initform nil :accessor awcl-palette-id-requested)
-   (palette :initform (make-array 16 :element-type '(unsigned-byte 32)
-                                     :initial-element 0)
+   (palette :initform (make-array 16 :element-type 'clim:color
+                                     :initial-element clim:+black+)
             :accessor awcl-palette)
+   (psudopalette :initform (make-array 16
+				       :element-type 'clim:color
+				       :initial-contents
+				       (list clim:+grey1+ clim:+grey2+ clim:+grey3+ clim:+grey4+
+					     clim:+grey5+ clim:+grey6+ clim:+grey7+ clim:+grey8+
+					     clim:+grey9+ clim:+grey10+ clim:+grey11+ clim:+grey12+
+					     clim:+grey13+ clim:+grey14+ clim:+grey15+ clim:+grey16+))
+		 :accessor awcl-pseudopalette)
+   (polygon-cache :initform nil :accessor awcl-polygon-cache)
+   (palette-table :initform (make-hash-table :size 16)
+            :accessor awcl-palette-table)
    (image :initform (make-image *canvas-width* *canvas-height*)
           :accessor awcl-image)
    (play-thread :initform nil :accessor awcl-play-thread)
@@ -47,18 +60,43 @@
                     :display-time nil
                     :display-function 'redraw-canvas)))
 
+(defun run ()
+  (setf *frame* (make-application-frame 'awcl))
+  (run-frame-top-level *frame*))
+
+(defmethod run-frame-top-level :before ((frame awcl) &key &allow-other-keys)
+  (let ((pane (first (frame-current-panes frame))))
+    (setf (awcl-vm frame) (vm-create *memlist-bin-path* frame)
+          (awcl-pixmaps frame) (loop repeat 4
+                                     collect (allocate-pixmap pane
+                                                              *canvas-width*
+                                                              *canvas-height*))
+          (awcl-fb-list frame) (loop for i from 0 below 4
+                                     for medium = (make-medium (port pane) pane)
+                                     do (setf (medium-drawable medium)
+                                              (elt (awcl-pixmaps frame) i))
+                                     collect medium)
+          (awcl-currfb-3 frame) (awcl-get-fb frame 1)
+          (awcl-currfb-2 frame) (awcl-get-fb frame 2)
+          (awcl-currfb-1 frame) (awcl-get-fb frame #xFE)
+          (awcl-currpix-3 frame) (awcl-get-pix frame 1)
+          (awcl-currpix-2 frame) (awcl-get-pix frame 2)
+          (awcl-currpix-1 frame) (awcl-get-pix frame #xFE)))
+  (vm-change-part (awcl-vm frame) +game-part-2+)
+  (setf (awcl-palette-id-requested frame) 1)
+  (awcl-change-palette frame))
+
 (defun awcl-update-canvas (frame)
-  (let ((pixels (clime:pattern-array (awcl-image frame)))
-        (fb (awcl-currfb-2 frame))
-        (w/2 (/ *canvas-width* 2))
-        (canvas (first (frame-current-panes frame)))
-        (palette (awcl-palette frame)))
-    (dotimes (y *canvas-height*)
-      (dotimes (x w/2)
-        (let ((fb-val (aref fb (+ x (* y w/2)))))
-          (setf (aref pixels y (* 2 x)) (aref palette (ash fb-val -4))
-                (aref pixels y (1+ (* 2 x))) (aref palette (logand fb-val #xF))))))
-    (draw-design canvas (awcl-image frame) :x 0 :y 0)))
+  #|(loop with palette-table = (awcl-palette-table frame)
+	and pattern = (clime:pattern-array (awcl-currpix-2 frame))
+	for i from 0 below (* *canvas-width* *canvas-height*)
+	do (setf (row-major-aref pattern i)
+		 (gethash (row-major-aref pattern i) palette-table)))|#
+  (let ((pix (awcl-currpix-2 frame)))
+    ;;(break)
+    (copy-from-pixmap pix 0 0
+		      *canvas-width* *canvas-height*
+		      (first (frame-current-panes frame)) 0 0)))
 
 (defun awcl-get-fb (frame fb-id)
   (if (<= fb-id 3)
@@ -66,19 +104,38 @@
       (case fb-id
         (#xFF (awcl-currfb-3 frame))
         (#xFE (awcl-currfb-2 frame))
-        (t (aref (awcl-fb-list frame) 0)))))
+        (t (first (awcl-fb-list frame))))))
+
+(defun awcl-get-pix (frame pix-id)
+  (if (<= pix-id 3)
+      (elt (awcl-pixmaps frame) pix-id)
+      (case pix-id
+        (#xFF (awcl-currpix-3 frame))
+        (#xFE (awcl-currpix-2 frame))
+        (t (first (awcl-pixmaps frame))))))
 
 (defun awcl-fill-fb (frame fb-id color)
   (declare (optimize (speed 3)))
   (let* ((fb (awcl-get-fb frame fb-id))
-         (color (logior (ash color 4) color)))
-    (dotimes (i (the fixnum (awcl-fb-size frame)))
-      (setf (aref fb i) color))))
+         ;;(color (logior (the fixnum (ash color 4)) color))
+         )
+    (declare (type fixnum color))
+    (format *debug-io* "~4tcolor ~s~%" color)
+    ;;(break)
+    (with-bounding-rectangle* (x0 y0 x1 y1) (medium-sheet fb)
+      (clim:draw-rectangle* fb x0 y0 x1 y1
+                            :filled t
+                            :ink (if (< color 16)
+                                     (aref (awcl-palette frame) color)
+                                     clim:+cyan+)))
+    ;;(dotimes (i (the fixnum (awcl-fb-size frame))) (setf (row-major-aref (clime:pattern-array fb) i) color))
+    ))
 
-(defun awcl-copy-fb (frame src-fb-id dst-fb-id vscroll)
+(defun awcl-copy-fb% (frame src-fb-id dst-fb-id vscroll)
   (flet ((copy-fb (src dst)
            (dotimes (i (awcl-fb-size frame))
-             (setf (aref dst i) (aref src i))))
+             (setf (row-major-aref (clime:pattern-array dst) i)
+                   (row-major-aref (clime:pattern-array src) i))))
          (copy-fb-scroll (src dst)
            (when (and (>= vscroll -199) (<= vscroll 199))
              (let ((h 200)
@@ -90,7 +147,7 @@
                    (progn (decf h vscroll)
                           (setf q (* 160 vscroll))))
                (dotimes (i (* h 160))
-                 (setf (aref dst (+ i q)) (aref src (+ i p))))))))
+                 (setf (row-major-aref (clime:pattern-array dst) (+ i q)) (row-major-aref (clime:pattern-array src) (+ i p))))))))
    (unless (= src-fb-id dst-fb-id)
      (if (or (>= src-fb-id #xFE)
              (= 0 (ldb (byte 1 7)
@@ -100,35 +157,87 @@
          (copy-fb-scroll (awcl-get-fb frame (logand 3 src-fb-id))
                          (awcl-get-fb frame dst-fb-id))))))
 
+(defun awcl-copy-fb (frame src-fb-id dst-fb-id vscroll)
+  (flet ((copy-fb (src dst)
+           (clim:copy-from-pixmap src 0 0
+                                  (clim:pixmap-width src) (clim:pixmap-height src)
+                                  dst 0 0))
+         (copy-fb-scroll (src dst)
+           ;;(break)
+           (when (and (>= vscroll -199) (<= vscroll 199))
+             (let ((h 200)
+                   (q 0)
+                   (p 0))
+               (cond ((minusp vscroll)
+                      (incf h vscroll)
+                      (setf p (* -160 vscroll)))
+                     (t (decf h vscroll)
+                        (setf q (* 160 vscroll))))
+               (dotimes (i (* h 160))
+                 (setf (row-major-aref (clime:pattern-array dst) (+ i q))
+                       (row-major-aref (clime:pattern-array src) (+ i p))))))))
+   (unless (= src-fb-id dst-fb-id)
+     (if (or (>= src-fb-id #xFE)
+             (= 0 (ldb (byte 1 7)
+                       (setf src-fb-id (logand src-fb-id #xBF)))) )
+         (copy-fb (awcl-get-pix frame src-fb-id)
+                  (awcl-get-fb frame dst-fb-id))
+         (copy-fb-scroll (awcl-get-pix frame (logand 3 src-fb-id))
+                         (awcl-get-fb frame dst-fb-id))))))
+
 (defun %vals->rgba (r g b &optional (a #xff))
   (declare (type (unsigned-byte 8) r g b a)
            (optimize (speed 3) (safety 0)))
   (logior (ash a 24) (ash r 16) (ash g 8) (ash b 0)))
 
-(defun awcl-update-display (frame fb-id)
-  (when (/= fb-id #xFE)
-    (if (= fb-id #xFF)
-        (psetf (awcl-currfb-2 frame) (awcl-currfb-3 frame)
-               (awcl-currfb-3 frame) (awcl-currfb-2 frame))
-        (setf (awcl-currfb-2 frame) (awcl-get-fb frame fb-id))))
-  (when (awcl-palette-id-requested frame)
+(defun awcl-change-palette (frame)
+  (flet (;; (color->int (color) (multiple-value-bind (r g b) (mcclim-render:color->octets color) (mcclim-render-internals::%vals->rgba r g b)))
+	 (mkcolor (c1 c2)
+           (make-rgb-color (/ (ash (logior (ash (logand c1 #x0F)  2)
+                                           (ash (logand c1 #x0F) -2))
+                                   2) 255.0)
+                           (/ (ash (logior (ash (logand c2 #xF0) -2)
+                                           (ash (logand c2 #xF0) -6))
+                                   2) 255.0)
+                           (/ (ash (logior (ash (logand c2 #x0F) -2)
+                                           (ash (logand c2 #x0F)  2))
+                                   2) 255.0))))
     (let ((pal-pos (* 32 (awcl-palette-id-requested frame)))
           (palette (awcl-palette frame))
+	  ;; (pseudopalette (awcl-pseudopalette frame))
+	  ;; (palette-table (awcl-palette-table frame))
           (palettes (rm-palette (vm-resource-manager (awcl-vm frame)))))
-      (dotimes (i 16)
-        (let ((c1 (aref palettes (+ i pal-pos)))
-              (c2 (aref palettes (+ i pal-pos 1))))
-          (setf (aref palette i) (%vals->rgba (ash (logior (ash (logand c1 #x0F) 2)
-                                                           (ash (logand c1 #x0F) -2))
-                                                   2)
-                                              (ash (logior (ash (logand c2 #xF0) -2)
-                                                           (ash (logand c2 #xF0) -6))
-                                                   2)
-                                              (ash (logior (ash (logand c2 #x0F) -2)
-                                                           (ash (logand c2 #x0F) 2))
-                                                   2))))))
-    (setf (awcl-palette-id frame) (awcl-palette-id-requested frame)
-          (awcl-palette-id-requested frame) nil))
+      (loop for i from 0 below 32 by 2
+            for j from 0
+            do (setf (aref palette j)
+		     (mkcolor (aref palettes (+ i pal-pos))
+                              (aref palettes (+ i pal-pos 1)))
+		     ;;;;
+		     ;; (gethash (color->int (aref pseudopalette j)) palette-table)
+		     ;; (color->int (aref palette j))
+                     ))
+      (format *debug-io* "awcl-change-palette: [~s] ~s~%" pal-pos palette)))
+  (setf (awcl-palette-id frame) (awcl-palette-id-requested frame)
+        (awcl-palette-id-requested frame) nil))
+
+(defun awcl-update-display (frame fb-id)
+  (when (awcl-palette-id-requested frame)
+    (awcl-change-palette frame))
+  (when (/= fb-id #xFE)
+    (cond ((= fb-id #xFF)
+           (rotatef (awcl-currpix-2 frame) (awcl-currpix-3 frame))
+           (rotatef (awcl-currfb-2 frame) (awcl-currfb-3 frame)))
+          (t (setf (awcl-currpix-2 frame) (awcl-get-pix frame fb-id)
+                   (awcl-currfb-2 frame) (awcl-get-fb frame fb-id)))))
+  (when (awcl-polygon-cache frame)
+    (labels ((traverse (cache)
+             (loop for f = (pop cache)
+                   while (and f (car f))
+                   if (listp (car f))
+                     do (traverse (reverse f))
+                   else do (apply (car f) (cdr f)))))
+      (traverse (reverse (awcl-polygon-cache frame))))
+    (setf (awcl-polygon-cache frame) nil))
   (awcl-update-canvas frame))
 
 (defclass awcl-polygon ()
@@ -136,39 +245,101 @@
    (height :initarg :height :reader awcl-polygon-height)
    (points :initarg :points :accessor awcl-polygon-points)))
 
-(defun read-polygon (stream zoom)
-  (let ((poly (make-instance 'awcl-polygon
-                             :width (/ (* (fetch-byte stream) zoom) 64)
-                             :height (/ (* (fetch-byte stream) zoom) 64)))
-        (num-points (fetch-byte stream)))
-    ;;(make-polygon* )
+(defun read-polygon% (stream zoom)
+  (declare (optimize (speed 3))
+           (type (integer 0 65535) zoom))
+  (let* ((w (fetch-byte stream))
+         (h (fetch-byte stream))
+         (poly (make-instance 'awcl-polygon
+                              :width (truncate (* w zoom) 64)
+                              :height (truncate (* h zoom) 64)))
+         (num-points (fetch-byte stream)))
+    (declare (type (integer 0 255) num-points w h))
     (setf (awcl-polygon-points poly)
           (loop repeat num-points
-                collect (make-point (/ (* (fetch-byte stream) zoom) 64)
-                                    (/ (* (fetch-byte stream) zoom) 64))))
+                for x of-type (integer 0 255) = (fetch-byte stream)
+                for y of-type (integer 0 255) = (fetch-byte stream)
+                collect (make-point (truncate (* x zoom) 64)
+                                    (truncate (* y zoom) 64))))
     poly))
 
-(defun awcl-draw-polygon (frame offset color zoom x y)
-  (let ((stream (rm-cinematic-stream (vm-resource-manager (awcl-vm frame)))))
-    (file-position stream offset)
-    (let ((i (fetch-byte stream)))
-      (cond
-        ((> i #xC0) ; 192
-         (when (ldb (byte 1 7) color)
-           (setf color (logand i #x3F)))
-         (let ((polygon (read-polygon stream zoom)))
-           (format *debug-io* "~S~%" polygon)))
-        (t
-         t)))))
+(defun read-polygon (stream zoom)
+  (make-instance 'awcl-polygon
+                 :width (truncate (* (fetch-byte stream) zoom) 64)
+                 :height (truncate (* (fetch-byte stream) zoom) 64)
+                 :points (loop repeat (fetch-byte stream)
+                               collect (make-point (truncate (* (fetch-byte stream) zoom) 64)
+                                                   (truncate (* (fetch-byte stream) zoom) 64)))))
 
-(defun run ()
-  (setf *frame* (make-application-frame 'awcl)
-        (awcl-vm *frame*) (vm-create *memlist-bin-path* *frame*)
-        (awcl-currfb-3 *frame*) (awcl-get-fb *frame* 1)
-        (awcl-currfb-2 *frame*) (awcl-get-fb *frame* 2)
-        (awcl-currfb-1 *frame*) (awcl-get-fb *frame* #xFE))
-  (vm-change-part (awcl-vm *frame*) +game-part-2+)
-  (run-frame-top-level *frame*))
+(defun awcl-draw-polygon-impl (frame sheet polygon color x y)
+  (with-drawing-options (sheet :transformation
+                               (clim:make-translation-transformation
+                                (- x (/ (awcl-polygon-width polygon)
+                                        2))
+                                (- y (/ (awcl-polygon-height polygon)
+                                        2))))
+    (draw-polygon sheet (awcl-polygon-points polygon)
+                  :ink (if (< color 16)
+                           (aref (awcl-palette frame) color)
+                           clim:+flipping-ink+)
+                  :line-joint-shape :none
+                  :line-cap-shape :square
+                  :line-thickness 1
+                  :filled t)))
+
+(defun awcl-draw-polygon* (i stream frame sheet color zoom x y &optional branch-p)
+  (let ((element (list 'awcl-draw-polygon-impl frame sheet
+                       (read-polygon stream zoom)
+                       (if (= 1 (ldb (byte 1 7) color))
+                           (logand i #x3F)
+                           color)
+                       x y)))
+    (if branch-p element (push element
+                               (awcl-polygon-cache frame)))))
+
+(defun awcl-draw-polygon-hierarchy (frame zoom x y &optional branch-p)
+  (loop with cache-branch = (list)
+        and fb = (awcl-currfb-1 frame)
+        and stream = (rm-cinematic-stream (vm-resource-manager (awcl-vm frame)))
+        with ptx = (- x (truncate (* (fetch-byte stream) zoom) 64))
+        and pty = (- y (truncate (* (fetch-byte stream) zoom) 64))
+        and num-childs = (fetch-byte stream)
+        initially (format *debug-io* "awcl-draw-polygon-hierarchy: ~3d ~3d (~d) [~d]~%"
+                          x y num-childs zoom)
+        repeat num-childs
+        for color = #xFF
+        and offset = (fetch-word stream)
+        and pox = (+ ptx (floor (* (fetch-byte stream) zoom) 64))
+        and poy = (+ pty (floor (* (fetch-byte stream) zoom) 64))
+        if (= 1 (ldb (byte 1 15) offset))
+          do (setf color (logand (fetch-byte stream) #x7F))
+             (fetch-byte stream)
+        end
+        do (let ((pos (file-position stream))
+                 (elemento (awcl-draw-polygon frame (* 2 (logand offset #x7FFF))
+                                              color zoom pox poy t)))
+             (when elemento (push elemento cache-branch))
+             (file-position stream pos))
+        finally (return (if branch-p
+                            cache-branch
+                            (prog1 nil
+                              (push cache-branch (awcl-polygon-cache frame)))))))
+
+;;(format *debug-io* "awcl-draw-polygon: ~s%" (awcl-polygon-points (read-polygon cinestream zoom)))
+(defun awcl-draw-polygon (frame offset color zoom x y &optional branch-p)
+  (with-accessors ((rm vm-resource-manager)) (awcl-vm frame)
+   (let ((stream (if (rm-use-seg-video2 rm)
+                     (rm-seg-video2 rm)
+                     (rm-cinematic-stream rm))))
+     (file-position stream offset)
+     (let ((i (fetch-byte stream)))
+       (if (>= i #xC0)
+           (awcl-draw-polygon* i stream frame (awcl-currfb-1 frame)
+                               color zoom x y branch-p)
+           (case (logand i #x3F)        ; 63
+             (1 (format *debug-io* "awcl-draw-polygon*: ec=~X (i != 2)~%" #xF80))
+             (2 (awcl-draw-polygon-hierarchy frame zoom x y branch-p))
+             (t (format *debug-io* "awcl-draw-polygon*: ec=~X (i != 2)~%" #xFBB))))))))
 
 (defun redraw-canvas (frame &optional gadget-arg)
   t)
@@ -191,6 +362,12 @@
   (when *frame*
     (setf (awcl-playing *frame*) nil)))
 
+(define-awcl-command (com-pause :name "Pause game") ()
+  (when *frame*
+    (if (awcl-playing *frame*)
+        (execute-frame-command *frame* `(com-stop))
+        (execute-frame-command *frame* `(com-new)))))
+
 (define-awcl-command (com-run-frame :name "One frame") ()
   (when *frame*
     (vm-run (awcl-vm *frame*))))
@@ -200,4 +377,6 @@
   (case (keyboard-event-key-name event)
     ((:Q :|q|) (execute-frame-command *frame* `(com-stop)))
     ((:N :|n|) (execute-frame-command *frame* `(com-new)))
-    ((:| |) (execute-frame-command *frame* `(com-run-frame)))))
+    ((:P :|p|) (execute-frame-command *frame* `(com-pause)))
+    ((:| |) (unless (awcl-playing *frame*)
+              (execute-frame-command *frame* `(com-run-frame))))))
