@@ -249,6 +249,8 @@
             :initform nil)
    (cinematic-stream :accessor rm-cinematic-stream
                      :initform nil)
+   (video2-stream :accessor rm-video2-stream
+                  :initform nil)
    ;;(seg-palettes :accessor rm-seg-palettes :initform nil)
    ;;(seg-bytecode :accessor rm-seg-bytecode :initform nil)
    ;;(seg-cinematic :accessor rm-seg-cinematic :initform nil)
@@ -283,12 +285,13 @@
                ((bytecode) (setf (rm-script-stream rm)
                                  (flexi-streams:make-in-memory-input-stream
                                   (resource-data res))))
-               ((palette) (setf (rm-palette rm)
-                                (resource-data res))))))
+               ((palette)
+                ;;(break)
+                (setf (rm-palette rm) (resource-data res))))))
 
 (defun rm-setup-part (rm part-id &optional (memlist-parts *memlist-parts*))
-  (assert (or (>= part-id +game-part-first+)
-              (<= part-id +game-part-last+)))
+  (assert (and (>= part-id +game-part-first+)
+               (<= part-id +game-part-last+)))
   (when (/= (rm-current-part-id rm) part-id)
     (let ((memlist (rm-memlist rm)))
       (a:when-let* ((idx (- part-id +game-part-first+))
@@ -302,9 +305,13 @@
               (mem-entry-state bytecode-entry) +mem-entry-state-load-me+
               (mem-entry-state video-1-entry) +mem-entry-state-load-me+)
         (when (/= video-2-idx +memlist-part-none+)
-          (setf (mem-entry-state (aref memlist video-2-idx)) +mem-entry-state-load-me+
-                (rm-seg-video2 rm) (mem-entry-buffer (aref memlist video-2-idx))))
+          (let ((video-2-entry (aref memlist video-2-idx)))
+            (setf (mem-entry-state video-2-entry)
+                  +mem-entry-state-load-me+)))
         (rm-load-resources rm)
+        (when (/= video-2-idx +memlist-part-none+)
+          (break)
+          (setf (rm-seg-video2 rm) (mem-entry-buffer (aref memlist video-2-idx))))
         (setf ;;(rm-seg-palettes rm) (mem-entry-buffer palette-entry)
               ;;(rm-seg-bytecode rm) (mem-entry-buffer bytecode-entry)
               ;;(rm-seg-cinematic rm) (mem-entry-buffer video-1-entry)
@@ -324,9 +331,11 @@
 
 (defun rm-setup-next-part (rm)
   (with-slots (next-part-id) rm
-    (when (/= 0 next-part-id)
-      (rm-setup-part rm next-part-id)
-      (setf next-part-id 0))))
+    (if (/= 0 next-part-id)
+        (progn
+          (rm-setup-part rm next-part-id)
+          (setf next-part-id 0)
+          t))))
 
 ;;;;
 (defun be-ui32-a (v)

@@ -43,7 +43,7 @@
 (defmethod print-object ((object channel) stream)
   (print-unreadable-object (object stream :type t :identity t)
     (format stream
-            "id=~2,'0D pc-offset=0x~4,'0X requested-pc-offset=0x~4,'0X"
+            "id=0x~2,'0X pc-offset=0x~4,'0X requested-pc-offset=0x~4,'0X"
             (channel-id object)
             (channel-pc-offset object)
             (channel-requested-pc-offset object))))
@@ -86,7 +86,11 @@
     vm))
 
 (defun check-channel-requests (vm)
-  (rm-setup-next-part (vm-resource-manager vm))
+  (when (rm-setup-next-part (vm-resource-manager vm))
+    (loop for c across (vm-channels vm)
+          do (setf (channel-pc-offset c) +vm-inactive-channel+
+                   (channel-requested-pc-offset c) +vm-no-setvec-requested+))
+    (setf (channel-pc-offset (aref (vm-channels vm) 0)) 0))
   (loop for channel across (vm-channels vm)
         for offset = (channel-requested-pc-offset channel)
         for state = (channel-state channel)
@@ -113,9 +117,14 @@
                      (runtime-error-position condition)))))
 
 ;;(declaim (inline fetch-word fetch-byte))
+(declaim (inline fetch-byte fetch-word fetch-sword))
 (defun fetch-word (stream)
   (let ((binary-types:*endian* :big-endian))
     (binary-types:read-binary 'binary-types:u16 stream)))
+
+(defun fetch-sword (stream)
+  (let ((binary-types:*endian* :big-endian))
+    (binary-types:read-binary 'binary-types:s16 stream)))
 
 (defun fetch-byte (stream)
   (binary-types:read-binary 'binary-types:u8 stream))
@@ -126,26 +135,40 @@
 
 (defun run-channel (vm)
   (loop with stop = nil
-        with script-stream = (rm-script-stream (vm-resource-manager vm))
+        and rm = (vm-resource-manager vm)
+        and frame = (vm-frame vm)
+        with script-stream = (rm-script-stream rm)
         for opcode = (fetch-byte script-stream)
         if (= (ldb (byte 1 7) opcode) 1) do
-          (format *debug-io* "[0x80] opcode=0x~4,'0X~%" opcode)
-          (vm-draw-polygon vm (mod (* 2 (logior (ash opcode 8) (fetch-byte script-stream))) (expt 2 16))
-                           (fetch-byte script-stream)
-                           (fetch-byte script-stream))
+          ;; #x80
+          (setf (rm-use-seg-video2 rm) nil)
+          (let* ((off (logand (* 2 (logior (ash opcode 8)
+                                           (fetch-byte script-stream)))
+                              #xFFFF))
+                 (x (fetch-byte script-stream))
+                 (y (fetch-byte script-stream))
+                 (h (- y 199)))
+            (when (plusp h)
+              (setf y 199)
+              (incf x h))
+            (format *debug-io*
+                    "[0x80] opcode=0x~4,'0X ; 0x~6,'0x ~3,'0d ~3,'0d~%"
+                    opcode off x y)
+            (awcl-draw-polygon frame off #xFF #x40 x y))
         else if (= (ldb (byte 1 6) opcode) 1) do
-          (format *debug-io* "[0x40] opcode=0x~4,'0X~%" opcode)
-          (let ((off (* 2 (fetch-word script-stream)))
+          ;; #x40
+          (setf (rm-use-seg-video2 rm) nil)
+          (let ((off (logand (* 2 (fetch-word script-stream))
+                             #xFFFF))
                 (y)
                 (x (fetch-byte script-stream))
                 (zoom))
-            (setf (rm-use-seg-video2 (vm-resource-manager vm)) nil)
             (if (zerop (logand opcode #x20))
                 (setf x (if (zerop (logand opcode #x10))
                             (logior (ash x 8) (fetch-byte script-stream))
                             (aref (vm-variables vm) x)))
                 (when (= (logand opcode #x10) 1)
-                  (incf x #x100)))
+                  (logand (incf x #x100) #xFFFF)))
             (setf y (fetch-byte script-stream))
             (when (zerop (logand opcode #x8))
               (setf y (if (zerop (logand opcode #x4))
@@ -159,17 +182,21 @@
                                                 (1- (file-position script-stream))))
                                (aref (vm-variables vm) zoom)))
                 (when (= (logand opcode #x1) 1)
-                  (setf (rm-use-seg-video2 (vm-resource-manager vm)) t)
+                  (setf (rm-use-seg-video2 rm) t
+                        zoom #x40)
                   (file-position script-stream
-                                 (1- (file-position script-stream)))
-                  (setf zoom #x40))))
+                                 (1- (file-position script-stream)))))
+            (format *debug-io*
+                    "[0x40] opcode=0x~4,'0X ; 0x~6,'0x ~3,'0d ~3,'0d~%"
+                    opcode off x y)
+            (awcl-draw-polygon (vm-frame vm) off #xFF zoom x y))
         else if (> opcode #x1a) do
           (format *debug-io* "[ >  #x1a]  opcode=~4X  ⸺  ~%" opcode)
           (error (make-condition 'runtime-error
                                  :opcode opcode
                                  :position (file-position script-stream)))
         else do
-          (format *debug-io* "Opcode: 0x~X~%" opcode)
+          ;;(format *debug-io* "Opcode: 0x~4,'0X " opcode)
           (setf stop (funcall (vm-op-function opcode) vm script-stream))
         end
         until stop))
@@ -177,14 +204,18 @@
 (defun run-one-frame (vm)
   (loop with script-stream = (rm-script-stream (vm-resource-manager vm))
         for channel across (vm-channels vm)
-        when (channel-is-active-p channel)
-          do (format *debug-io* "channel activo: ~S~%" channel)
+        when (and (null (channel-state-current (channel-state channel)))
+                  (channel-is-active-p channel))
+          do (format *debug-io* "channel[0]: ~S~%" channel)
              (file-position script-stream (channel-pc-offset channel))
+             (format *debug-io* "channel[1]: ~D~%" (file-position script-stream))
              (run-channel vm)
-             (setf (channel-pc-offset channel) (file-position script-stream))))
+             (setf (channel-pc-offset channel) (file-position script-stream))
+             (format *debug-io* "channel[2]: ~S~%" channel)))
 
 ;;;;
 (defun vm-change-part (vm part-id)
+  (setf (aref (vm-variables vm) #xE4) #x14)
   (rm-setup-part (vm-resource-manager vm) part-id)
   (loop for c across (vm-channels vm)
         do (setf (channel-pc-offset c) +vm-inactive-channel+
@@ -199,7 +230,7 @@
     (dotimes (i (vm-num-variables vm))
       (setf (aref variables i) 0))
     (setf (aref variables #x54) #x81
-          (aref variables +vm-variable-random-seed+) (ash (get-universal-time) -17)
+          (aref variables +vm-variable-random-seed+) (logand (get-universal-time) #x7fff)
           ;; (sfxplayer-mark-var (getf vm :player)) (aref variables +variable-mus-mark+)
           (aref variables #xBC) #x10
           (aref variables #xC6) #x80
@@ -221,30 +252,32 @@
 
 (def-op-function (vm stream (cmov #x00))
   (let ((var-id (fetch-byte stream))
-        (value (fetch-word stream)))
-    (format *debug-io* "CMOV var-id=~D value=0x~X~%" var-id value)
+        (value (fetch-sword stream)))
+    (format *debug-io* "CMOV var-id=0x~2,'0X value=0x~X~%" var-id value)
     (setf (aref (vm-variables vm) var-id) value))
   nil)
 
 (def-op-function (vm stream (mov #x01))
   (let ((dst-var (fetch-byte stream))
         (src-var (fetch-byte stream)))
-    (format *debug-io* "MOV dst-var=~D src-var=~D~%" dst-var src-var)
+    (format *debug-io* "MOV dst-var=0x~2,'0X src-var=0x~2,'0X~%" dst-var src-var)
     (setf (aref (vm-variables vm) dst-var) (aref (vm-variables vm) src-var)))
   nil)
 
 (def-op-function (vm stream (add #x02))
   (let ((dst-var (fetch-byte stream))
         (src-var (fetch-byte stream)))
-    (format *debug-io* "ADD dst-var=~D src-var=~D~%" dst-var src-var)
+    (format *debug-io* "ADD dst-var=0x~2,'0X src-var=0x~2,'0X~%" dst-var src-var)
     (incf (aref (vm-variables vm) dst-var) (aref (vm-variables vm) src-var)))
   nil)
 
 (def-op-function (vm stream (cadd #x03))
   (let ((var-id (fetch-byte stream))
-        (value (fetch-word stream)))
-    (format *debug-io* "CADD var-id=~D value=0x~X~%" var-id value)
-    (incf (aref (vm-variables vm) var-id) value))
+        (value (fetch-sword stream)))
+    (declare (type (signed-byte 16) value))
+    (incf (aref (vm-variables vm) var-id) value)
+    (format *debug-io* "CADD var-id=0x~2,'0X value=0x~X [~6d]~%" var-id value
+            (aref (vm-variables vm) var-id)))
   nil)
 
 (def-op-function (vm stream (call #x04))
@@ -300,43 +333,40 @@
 (def-op-function (vm stream (cond-jmp #x0A))
   (let* ((opcode (fetch-byte stream))
          (condition (logand opcode #x7))
-         (b (aref (vm-variables vm) (fetch-byte stream)))
+         (b-id (fetch-byte stream))
+         (b (aref (vm-variables vm) b-id))
          (a (cond
-              ((> (logand opcode #x80) 0)
+              ((= (ldb (byte 1 7) opcode) 1) ; #x80
                (aref (vm-variables vm) (fetch-byte stream)))
-              ((> (logand opcode #x40) 0)
-               (fetch-word stream))
+              ((= (ldb (byte 1 6) opcode) 1) ; #x40
+               (fetch-sword stream))
               (t (fetch-byte stream))))
-         (func (case condition
-                 (0 #'=)
-                 (1 #'/=)
-                 (2 #'>)
-                 (3 #'>=)
-                 (4 #'<)
-                 (5 #'<=)
-                 (otherwise nil))))
+         (func (if (<= 0 condition 5)
+                   (aref '#(= /= > >= < <=) condition)
+                   (error "cond-jmp-op: invalid condition ~d" condition))))
     (format *debug-io*
-            "COND-JMP opcode=0x~X condition=0x~X func=~S b=0x~X a=0x~X~%"
-            opcode condition func b a)
-    (if func
-      (if (funcall func b a)
-          (jmp-op vm stream)
-          (fetch-word stream))
-      (warn "cond-jmp-op: invalid condition ~d" condition)))
+            "COND-JMP opcode=0x~X condition=0x~X func=~S b[0x~X]=0x~X a=0x~X~%"
+            opcode condition func b-id b a)
+    (if (funcall func b a)
+        (jmp-op vm stream)
+        (fetch-word stream)))
   nil)
 
 (def-op-function (vm stream (set-pal #x0B))
-  (let ((pallete-id (fetch-word stream)))
-    (format *debug-io* "SET-PAL pallete-id=0x~X~%" pallete-id)
-    (setf (awcl-palette-id-requested (vm-frame vm))
-          (ash pallete-id -8)))
+  (let ((palette-id (ash (fetch-word stream) -8))
+        (frame (vm-frame vm)))
+    (format *debug-io* "SET-PAL palette-id=0x~X~%" palette-id)
+    ;;(break)
+    (setf (awcl-palette-id-requested frame) palette-id)
+    ;;(awcl-change-palette frame)
+    )
   nil)
 
 (def-op-function (vm stream (reset-channel #x0C))
   (let ((channel-id (fetch-byte stream))
         (i (a:clamp (fetch-byte stream) 0 (1- *num-channels*))))
     (format *debug-io* "RESET-CHANNEL channel-id=~D i=~D~%" channel-id i)
-    (if (> i channel-id)
+    (if (> channel-id i)
         (warn "reset-channel: ec=0x~X (i > channel-id)" #x880)
         (let ((a (fetch-byte stream))
               (channels (vm-channels vm)))
@@ -460,14 +490,13 @@
 (def-op-function (vm stream (load-resc #x19))
   (let ((res-id (fetch-word stream)))
     (format *debug-io* "LOAD-RESC res-id=~D~%" res-id)
-    (if (< res-id (length (rm-memlist (vm-resource-manager vm))))
-        (rm-load-memory-entry (vm-resource-manager vm) res-id)
-        (rm-load-part (vm-resource-manager vm) res-id))
-    #|(if (zerop res-id)
+    (if (zerop res-id)
+        t
         (progn
-          t)
-        (vm-resource-manager vm))|#)
-  nil)
+          (if (< res-id (length (rm-memlist (vm-resource-manager vm))))
+              (rm-load-memory-entry (vm-resource-manager vm) res-id)
+              (rm-load-part (vm-resource-manager vm) res-id))
+          nil))))
 
 (def-op-function (vm stream (play-music #x1A))
   (declare (ignore vm))
