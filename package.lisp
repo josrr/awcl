@@ -3,4 +3,5 @@
 (defpackage #:awcl
   (:use #:clim #:clim-lisp #:mcclim-render)
   (:local-nicknames (#:a #:alexandria))
-  (:export #:run))
+  (:export #:run
+           #:*memlist-bin-path*))
