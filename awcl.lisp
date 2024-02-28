@@ -254,7 +254,7 @@
 (defun awcl-draw-polygon-hierarchy (frame zoom x y &optional branch-p)
   (loop with cache-branch = (list)
         and fb = (awcl-currfb-1 frame)
-        and stream = (rm-cinematic-stream (vm-resource-manager (awcl-vm frame)))
+        and stream = (vm-current-stream (awcl-vm frame))
         with ptx = (- x (truncate (* (fetch-byte stream) zoom) 64))
         and pty = (- y (truncate (* (fetch-byte stream) zoom) 64))
         and num-childs = (fetch-byte stream)
