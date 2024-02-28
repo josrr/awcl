@@ -305,31 +305,41 @@
            do (vm-run (awcl-vm frame))
            finally (format *debug-io* "Game stopped!~%")))))
 
+(define-awcl-command (com-continue :name "Continue game") ()
+  (when *application-frame*
+    (setf (awcl-playing *application-frame*) t)))
+
 (define-awcl-command (com-new :name "New game") ()
-  (when *frame*
-    (unless (awcl-playing *frame*)
-      (setf (awcl-play-thread *frame*) (make-play-thread *frame*)
-            (awcl-playing *frame*) t))))
+  (a:when-let ((frame *application-frame*))
+    (setf (awcl-playing frame) nil
+          (awcl-vm frame) (vm-create *memlist-bin-path* frame)
+          ;;(awcl-palette-id-requested frame) 1
+          )
+    (vm-change-part (awcl-vm frame) +game-part-2+)
+    ;;(awcl-change-palette frame)
+    (setf (awcl-play-thread frame) (make-play-thread frame)
+          (awcl-playing frame) t)))
 
 (define-awcl-command (com-stop :name "Stop game") ()
-  (when *frame*
-    (setf (awcl-playing *frame*) nil)))
+  (when *application-frame*
+    (setf (awcl-playing *application-frame*) nil)))
 
 (define-awcl-command (com-pause :name "Pause game") ()
-  (when *frame*
-    (if (awcl-playing *frame*)
-        (execute-frame-command *frame* `(com-stop))
-        (execute-frame-command *frame* `(com-new)))))
+  (when *application-frame*
+    ;;(break)
+    (if (awcl-playing *application-frame*)
+        (execute-frame-command *application-frame* `(com-stop))
+        (execute-frame-command *application-frame* `(com-continue)))))
 
 (define-awcl-command (com-run-frame :name "One frame") ()
-  (when *frame*
-    (vm-run (awcl-vm *frame*))))
+  (when *application-frame*
+    (vm-run (awcl-vm *application-frame*))))
 
 (defmethod handle-event ((gadget canvas-pane) (event key-press-event))
-  (format *debug-io* "event:~S ~S!~%" event *frame*)
+  (format *debug-io* "event:~S ~S!~%" event *application-frame*)
   (case (keyboard-event-key-name event)
-    ((:Q :|q|) (execute-frame-command *frame* `(com-stop)))
-    ((:N :|n|) (execute-frame-command *frame* `(com-new)))
-    ((:P :|p|) (execute-frame-command *frame* `(com-pause)))
-    ((:| |) (unless (awcl-playing *frame*)
-              (execute-frame-command *frame* `(com-run-frame))))))
+    ((:Q :|q|) (execute-frame-command *application-frame* `(com-stop)))
+    ((:N :|n|) (execute-frame-command *application-frame* `(com-new)))
+    ((:P :|p|) (execute-frame-command *application-frame* `(com-pause)))
+    ((:space) (unless (awcl-playing *application-frame*)
+                (execute-frame-command *application-frame* `(com-run-frame))))))
