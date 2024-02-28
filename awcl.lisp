@@ -3,35 +3,31 @@
 (in-package #:awcl)
 
 (defparameter *memlist-bin-path* #p"./data/aw01/MEMLIST.BIN")
-(defparameter *canvas-width* 320)
-(defparameter *canvas-height* 200)
+(defparameter *canvas-width* 800)
+(defparameter *canvas-height* 600)
 (defparameter *frame* nil)
 
 (defclass canvas-pane (clim-stream-pane clime:never-repaint-background-mixin)
   ())
 
+(defmethod initialize-instance :after ((pane canvas-pane) &key contents)
+  (declare (ignore contents))
+  (setf (stream-recording-p pane) nil)
+  t)
+
 (define-application-frame awcl ()
-  (;;(width :initform *canvas-width*)
-   ;;(height :initform *canvas-height*)
-   (vm :initform nil :accessor awcl-vm)
+  ((vm :initform nil :accessor awcl-vm)
    (fb-size :initform (/ (* *canvas-width* *canvas-height*) 2)
             :accessor awcl-fb-size)
-   #|(fb-list :initform (loop repeat 4
-                            collect (make-image *canvas-width*
-                                                *canvas-height*))
-              :accessor awcl-fb-list)|#
    (fb-list :accessor awcl-fb-list)
-   (pixmaps :accessor awcl-pixmaps)
    (currfb-1 :initform nil :accessor awcl-currfb-1)
    (currfb-2 :initform nil :accessor awcl-currfb-2)
    (currfb-3 :initform nil :accessor awcl-currfb-3)
-   (currpix-1 :initform nil :accessor awcl-currpix-1)
-   (currpix-2 :initform nil :accessor awcl-currpix-2)
-   (currpix-3 :initform nil :accessor awcl-currpix-3)
    (palette-id :initform 0 :accessor awcl-palette-id)
    (palette-id-requested :initform nil :accessor awcl-palette-id-requested)
-   (palette :initform (make-array 16 :element-type 'clim:color
+   (palette :initform (make-array 16 :element-type t;'clim:color
                                      :initial-element clim:+black+)
+            :type (simple-array t)
             :accessor awcl-palette)
    (psudopalette :initform (make-array 16
 				       :element-type 'clim:color
@@ -61,42 +57,34 @@
                     :display-function 'redraw-canvas)))
 
 (defun run ()
-  (setf *frame* (make-application-frame 'awcl))
-  (run-frame-top-level *frame*))
+  (find-application-frame 'awcl))
 
 (defmethod run-frame-top-level :before ((frame awcl) &key &allow-other-keys)
-  (let ((pane (first (frame-current-panes frame))))
+  (let*  ((pane (first (frame-current-panes frame)))
+          (pixmaps (loop repeat 4
+                         collect (allocate-pixmap pane *canvas-width* *canvas-height*))))
     (setf (awcl-vm frame) (vm-create *memlist-bin-path* frame)
-          (awcl-pixmaps frame) (loop repeat 4
-                                     collect (allocate-pixmap pane
-                                                              *canvas-width*
-                                                              *canvas-height*))
           (awcl-fb-list frame) (loop for i from 0 below 4
                                      for medium = (make-medium (port pane) pane)
                                      do (setf (medium-drawable medium)
-                                              (elt (awcl-pixmaps frame) i))
+                                              (elt pixmaps i))
                                      collect medium)
           (awcl-currfb-3 frame) (awcl-get-fb frame 1)
           (awcl-currfb-2 frame) (awcl-get-fb frame 2)
-          (awcl-currfb-1 frame) (awcl-get-fb frame #xFE)
-          (awcl-currpix-3 frame) (awcl-get-pix frame 1)
-          (awcl-currpix-2 frame) (awcl-get-pix frame 2)
-          (awcl-currpix-1 frame) (awcl-get-pix frame #xFE)))
+          (awcl-currfb-1 frame) (awcl-get-fb frame #xFE)))
   (vm-change-part (awcl-vm frame) +game-part-2+)
-  (setf (awcl-palette-id-requested frame) 1)
-  (awcl-change-palette frame))
+  (setf (awcl-palette-id-requested frame) 1))
 
-(defun awcl-update-canvas (frame)
-  #|(loop with palette-table = (awcl-palette-table frame)
-	and pattern = (clime:pattern-array (awcl-currpix-2 frame))
+#|(loop with palette-table = (awcl-palette-table frame)
+        and pattern = (clime:pattern-array (awcl-currpix-2 frame))
 	for i from 0 below (* *canvas-width* *canvas-height*)
 	do (setf (row-major-aref pattern i)
 		 (gethash (row-major-aref pattern i) palette-table)))|#
-  (let ((pix (awcl-currpix-2 frame)))
-    ;;(break)
-    (copy-from-pixmap pix 0 0
-		      *canvas-width* *canvas-height*
-		      (first (frame-current-panes frame)) 0 0)))
+
+(defun awcl-update-canvas (frame)
+  (copy-from-pixmap (medium-drawable (awcl-currfb-2 frame)) 0 0
+                    *canvas-width* *canvas-height*
+                    (first (frame-current-panes frame)) 0 0))
 
 (defun awcl-get-fb (frame fb-id)
   (if (<= fb-id 3)
@@ -106,30 +94,17 @@
         (#xFE (awcl-currfb-2 frame))
         (t (first (awcl-fb-list frame))))))
 
-(defun awcl-get-pix (frame pix-id)
-  (if (<= pix-id 3)
-      (elt (awcl-pixmaps frame) pix-id)
-      (case pix-id
-        (#xFF (awcl-currpix-3 frame))
-        (#xFE (awcl-currpix-2 frame))
-        (t (first (awcl-pixmaps frame))))))
-
 (defun awcl-fill-fb (frame fb-id color)
   (declare (optimize (speed 3)))
-  (let* ((fb (awcl-get-fb frame fb-id))
-         ;;(color (logior (the fixnum (ash color 4)) color))
-         )
+  (let ((fb (awcl-get-fb frame fb-id)))
     (declare (type fixnum color))
     (format *debug-io* "~4tcolor ~s~%" color)
-    ;;(break)
     (with-bounding-rectangle* (x0 y0 x1 y1) (medium-sheet fb)
       (clim:draw-rectangle* fb x0 y0 x1 y1
                             :filled t
                             :ink (if (< color 16)
                                      (aref (awcl-palette frame) color)
-                                     clim:+cyan+)))
-    ;;(dotimes (i (the fixnum (awcl-fb-size frame))) (setf (row-major-aref (clime:pattern-array fb) i) color))
-    ))
+                                     clim:+cyan+)))))
 
 (defun awcl-copy-fb% (frame src-fb-id dst-fb-id vscroll)
   (flet ((copy-fb (src dst)
@@ -163,27 +138,26 @@
                                   (clim:pixmap-width src) (clim:pixmap-height src)
                                   dst 0 0))
          (copy-fb-scroll (src dst)
-           ;;(break)
-           (when (and (>= vscroll -199) (<= vscroll 199))
+           (when (<= -199 vscroll 199)
              (let ((h 200)
                    (q 0)
                    (p 0))
                (cond ((minusp vscroll)
                       (incf h vscroll)
-                      (setf p (* -160 vscroll)))
+                      (decf p (* 160 vscroll)))
                      (t (decf h vscroll)
-                        (setf q (* 160 vscroll))))
-               (dotimes (i (* h 160))
-                 (setf (row-major-aref (clime:pattern-array dst) (+ i q))
-                       (row-major-aref (clime:pattern-array src) (+ i p))))))))
+                        (incf q (* 160 vscroll))))
+               (clim:copy-from-pixmap src 0 0
+                                      (clim:pixmap-width src) h
+                                      dst 0 0)))))
    (unless (= src-fb-id dst-fb-id)
      (if (or (>= src-fb-id #xFE)
-             (= 0 (ldb (byte 1 7)
+             (= 0 (ldb (byte 1 7);; b1000 0000
                        (setf src-fb-id (logand src-fb-id #xBF)))) )
-         (copy-fb (awcl-get-pix frame src-fb-id)
+         (copy-fb (medium-drawable (awcl-get-fb frame src-fb-id))
                   (awcl-get-fb frame dst-fb-id))
-         (copy-fb-scroll (awcl-get-pix frame (logand 3 src-fb-id))
-                         (awcl-get-fb frame dst-fb-id))))))
+         (copy-fb-scroll (medium-drawable (awcl-get-fb frame (logand 3 src-fb-id)))
+                         (medium-drawable (awcl-get-fb frame dst-fb-id)))))))
 
 (defun %vals->rgba (r g b &optional (a #xff))
   (declare (type (unsigned-byte 8) r g b a)
@@ -225,17 +199,15 @@
     (awcl-change-palette frame))
   (when (/= fb-id #xFE)
     (cond ((= fb-id #xFF)
-           (rotatef (awcl-currpix-2 frame) (awcl-currpix-3 frame))
            (rotatef (awcl-currfb-2 frame) (awcl-currfb-3 frame)))
-          (t (setf (awcl-currpix-2 frame) (awcl-get-pix frame fb-id)
-                   (awcl-currfb-2 frame) (awcl-get-fb frame fb-id)))))
+          (t (setf (awcl-currfb-2 frame) (awcl-get-fb frame fb-id)))))
   (when (awcl-polygon-cache frame)
     (labels ((traverse (cache)
-             (loop for f = (pop cache)
-                   while (and f (car f))
-                   if (listp (car f))
-                     do (traverse (reverse f))
-                   else do (apply (car f) (cdr f)))))
+               (loop for f = (pop cache)
+                     while (and f (car f))
+                     if (listp (car f))
+                       do (traverse (reverse f))
+                     else do (apply (car f) (cdr f)))))
       (traverse (reverse (awcl-polygon-cache frame))))
     (setf (awcl-polygon-cache frame) nil))
   (awcl-update-canvas frame))
