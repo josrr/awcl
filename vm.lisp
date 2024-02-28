@@ -62,6 +62,7 @@
   (stack-calls nil :type (or null (simple-array (signed-byte 16) *)))
   (stack-pos 0 :type fixnum)
   (channels nil :type (or null (simple-array channel)))
+  (current-stream nil :type (or null flexi-streams:in-memory-stream))
   (last-time-stamp 0)
   (frame nil))
 
@@ -154,9 +155,9 @@
             (format *debug-io*
                     "[0x80] opcode=0x~4,'0X ; 0x~6,'0x ~3,'0d ~3,'0d~%"
                     opcode off x y)
+            (setf (vm-current-stream vm) (rm-cinematic-stream rm))
             (awcl-draw-polygon frame off #xFF #x40 x y))
-        else if (= (ldb (byte 1 6) opcode) 1) do
-          ;; #x40
+        else if (= (ldb (byte 1 6) opcode) 1) do ;; #x40
           (setf (rm-use-seg-video2 rm) nil)
           (let ((off (logand (* 2 (fetch-word script-stream))
                              #xFFFF))
@@ -189,6 +190,9 @@
             (format *debug-io*
                     "[0x40] opcode=0x~4,'0X ; 0x~6,'0x ~3,'0d ~3,'0d~%"
                     opcode off x y)
+            (setf (vm-current-stream vm) (if (rm-use-seg-video2 rm)
+                                             (rm-video2-stream rm)
+                                             (rm-cinematic-stream rm)))
             (awcl-draw-polygon (vm-frame vm) off #xFF zoom x y))
         else if (> opcode #x1a) do
           (format *debug-io* "[ >  #x1a]  opcode=~4X  ⸺  ~%" opcode)
@@ -217,6 +221,7 @@
 (defun vm-change-part (vm part-id)
   (setf (aref (vm-variables vm) #xE4) #x14)
   (rm-setup-part (vm-resource-manager vm) part-id)
+  (setf (vm-current-stream vm) (rm-cinematic-stream (vm-resource-manager vm)))
   (loop for c across (vm-channels vm)
         do (setf (channel-pc-offset c) +vm-inactive-channel+
                  (channel-requested-pc-offset c) +vm-inactive-channel+
