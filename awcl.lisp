@@ -217,24 +217,6 @@
    (height :initarg :height :reader awcl-polygon-height)
    (points :initarg :points :accessor awcl-polygon-points)))
 
-(defun read-polygon% (stream zoom)
-  (declare (optimize (speed 3))
-           (type (integer 0 65535) zoom))
-  (let* ((w (fetch-byte stream))
-         (h (fetch-byte stream))
-         (poly (make-instance 'awcl-polygon
-                              :width (truncate (* w zoom) 64)
-                              :height (truncate (* h zoom) 64)))
-         (num-points (fetch-byte stream)))
-    (declare (type (integer 0 255) num-points w h))
-    (setf (awcl-polygon-points poly)
-          (loop repeat num-points
-                for x of-type (integer 0 255) = (fetch-byte stream)
-                for y of-type (integer 0 255) = (fetch-byte stream)
-                collect (make-point (truncate (* x zoom) 64)
-                                    (truncate (* y zoom) 64))))
-    poly))
-
 (defun read-polygon (stream zoom)
   (make-instance 'awcl-polygon
                  :width (truncate (* (fetch-byte stream) zoom) 64)
