@@ -39,7 +39,7 @@
 		 :accessor awcl-pseudopalette)
    (polygon-cache :initform nil :accessor awcl-polygon-cache)
    (palette-table :initform (make-hash-table :size 16)
-            :accessor awcl-palette-table)
+                  :accessor awcl-palette-table)
    (image :initform (make-image *canvas-width* *canvas-height*)
           :accessor awcl-image)
    (play-thread :initform nil :accessor awcl-play-thread)
@@ -150,14 +150,14 @@
                (clim:copy-from-pixmap src 0 0
                                       (clim:pixmap-width src) h
                                       dst 0 0)))))
-   (unless (= src-fb-id dst-fb-id)
-     (if (or (>= src-fb-id #xFE)
-             (= 0 (ldb (byte 1 7);; b1000 0000
-                       (setf src-fb-id (logand src-fb-id #xBF)))) )
-         (copy-fb (medium-drawable (awcl-get-fb frame src-fb-id))
-                  (awcl-get-fb frame dst-fb-id))
-         (copy-fb-scroll (medium-drawable (awcl-get-fb frame (logand 3 src-fb-id)))
-                         (medium-drawable (awcl-get-fb frame dst-fb-id)))))))
+    (unless (= src-fb-id dst-fb-id)
+      (if (or (>= src-fb-id #xFE)
+              (= 0 (ldb (byte 1 7) ;; b1000 0000
+                        (setf src-fb-id (logand src-fb-id #xBF)))) )
+          (copy-fb (medium-drawable (awcl-get-fb frame src-fb-id))
+                   (awcl-get-fb frame dst-fb-id))
+          (copy-fb-scroll (medium-drawable (awcl-get-fb frame (logand 3 src-fb-id)))
+                          (medium-drawable (awcl-get-fb frame dst-fb-id)))))))
 
 (defun %vals->rgba (r g b &optional (a #xff))
   (declare (type (unsigned-byte 8) r g b a)
