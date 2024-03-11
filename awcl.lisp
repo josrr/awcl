@@ -263,7 +263,7 @@
         and poy = (+ pty (floor (* (fetch-byte stream) zoom) 64))
         if (= 1 (ldb (byte 1 15) offset))
           do (setf color (logand (fetch-byte stream) #x7F))
-             (fetch-byte stream)
+             (file-position stream (1+ (file-position stream)))
         end
         do (let ((pos (file-position stream))
                  (elemento (awcl-draw-polygon frame (* 2 (logand offset #x7FFF))
