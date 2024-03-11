@@ -275,8 +275,6 @@
                             (prog1 nil
                               (push cache-branch (awcl-polygon-cache frame)))))))
 
-;;(format *debug-io* "awcl-draw-polygon: ~s%" (awcl-polygon-points (read-polygon cinestream zoom)))
-;;(if (rm-use-seg-video2 rm) (rm-seg-video2 rm) (rm-cinematic-stream rm))
 (defun awcl-draw-polygon (frame offset color zoom x y &optional branch-p)
   (with-accessors ((rm vm-resource-manager)
                    (stream vm-current-stream)) (awcl-vm frame)
