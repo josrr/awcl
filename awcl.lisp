@@ -212,10 +212,9 @@
     (setf (awcl-polygon-cache frame) nil))
   (awcl-update-canvas frame))
 
-(defclass awcl-polygon ()
+(defclass awcl-polygon (standard-polygon)
   ((width :initarg :width :reader awcl-polygon-width)
-   (height :initarg :height :reader awcl-polygon-height)
-   (points :initarg :points :accessor awcl-polygon-points)))
+   (height :initarg :height :reader awcl-polygon-height)))
 
 (defun read-polygon (stream zoom)
   (make-instance 'awcl-polygon
@@ -227,27 +226,24 @@
 
 (defun awcl-draw-polygon-impl (frame sheet polygon color x y)
   (with-drawing-options (sheet :transformation
-                               (clim:make-translation-transformation
-                                (- x (/ (awcl-polygon-width polygon)
-                                        2))
-                                (- y (/ (awcl-polygon-height polygon)
-                                        2))))
-    (draw-polygon sheet (awcl-polygon-points polygon)
+                               (clim:compose-transformations (clim:make-scaling-transformation 3 2.5)
+                                                             (clim:make-translation-transformation
+                                                              (- x (/ (awcl-polygon-width polygon)
+                                                                      2))
+                                                              (- y (/ (awcl-polygon-height polygon)
+                                                                      2)))))
+    (draw-polygon sheet (polygon-points polygon)
                   :ink (if (< color 16)
                            (aref (awcl-palette frame) color)
                            clim:+flipping-ink+)
-                  :line-joint-shape :none
+                  :line-joint-shape :miter
                   :line-cap-shape :square
                   :line-thickness 1
                   :filled t)))
 
 (defun awcl-draw-polygon* (i stream frame sheet color zoom x y &optional branch-p)
   (let ((element (list 'awcl-draw-polygon-impl frame sheet
-                       (read-polygon stream zoom)
-                       (if (= 1 (ldb (byte 1 7) color))
-                           (logand i #x3F)
-                           color)
-                       x y)))
+                       (read-polygon stream zoom) color x y)))
     (if branch-p element (push element
                                (awcl-polygon-cache frame)))))
 
@@ -288,7 +284,10 @@
     (let ((i (fetch-byte stream)))
       (if (>= i #xC0)
           (awcl-draw-polygon* i stream frame (awcl-currfb-1 frame)
-                              color zoom x y branch-p)
+                              (if (= 1 (ldb (byte 1 7) color))
+                                  (logand i #x3F)
+                                  color)
+                              zoom x y branch-p)
           (case (logand i #x3F)       ; 63
             (1 (format *debug-io* "awcl-draw-polygon*: ec=~X (i != 2)~%" #xF80))
             (2 (awcl-draw-polygon-hierarchy frame zoom x y branch-p))
