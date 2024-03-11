@@ -49,6 +49,16 @@
 (defconstant +rt-bytecode+ 4)
 (defconstant +rt-poly-cinematic+ 5)
 
+(defgeneric mem-entry-load-p (entry)
+  (:method ((entry mem-entry))
+    (= (mem-entry-state entry) +mem-entry-state-load-me+)))
+
+(defmethod binary-types:read-binary-record :around ((type-name (eql 'mem-entry)) stream &key start stop &allow-other-keys)
+  (declare (ignore stream start stop))
+  (let ((object (call-next-method)))
+    (setf (slot-value object 'res-type) (cdr (assoc (slot-value object 'res-type) *resource-types*)))
+    object))
+
 (defmethod print-object ((object mem-entry) stream)
   (print-unreadable-object (object stream :type t :identity t)
     (format stream
@@ -182,7 +192,7 @@
                      (file-position si bank-offset)
                      (read-sequence buffer si)
                      (setf (mem-entry-state entry)
-                           (if (= (mem-entry-res-type entry) +rt-poly-anim+)
+                           (if (eq (mem-entry-res-type entry) 'poly-anim)
                                +mem-entry-state-not-needed+
                                +mem-entry-state-loaded+))
                      buffer)
@@ -264,28 +274,24 @@
                           (rm-script-stream rm) nil
                           (rm-palette rm) nil
                           (rm-cinematic-stream rm) nil))
-        for entry across (sort (remove-if #'(lambda (e)
-                                              (/= (mem-entry-state e)
-                                                  +mem-entry-state-load-me+))
-                                          (rm-memlist rm))
-                               #'> :key #'mem-entry-rank-num)
-        for restype = (cdr (assoc (mem-entry-res-type entry) *resource-types*))
-        for res = (and restype
-                       (make-resource restype entry (mem-entry-load entry)))
+        for entry across (sort (remove-if (complement #'mem-entry-load-p) (rm-memlist rm))
+                               #'>
+                               :key #'mem-entry-rank-num)
+        for restype = (mem-entry-res-type entry)
+        for res = (and restype (make-resource restype entry (mem-entry-load entry)))
         do (format *debug-io* "res: ~S~%" res)
         when res
           do (case restype
-               ((polygon-anim) (setf (rm-video-stream rm)
-                                     (flexi-streams:make-in-memory-input-stream
-                                      (resource-data res))))
-               ((polygon-cinematic) (setf (rm-cinematic-stream rm)
-                                          (flexi-streams:make-in-memory-input-stream
-                                           (resource-data res))))
-               ((bytecode) (setf (rm-script-stream rm)
-                                 (flexi-streams:make-in-memory-input-stream
-                                  (resource-data res))))
+               ((polygon-anim)
+                (setf (rm-video-stream rm)
+                      (flexi-streams:make-in-memory-input-stream (resource-data res))))
+               ((polygon-cinematic)
+                (setf (rm-cinematic-stream rm)
+                      (flexi-streams:make-in-memory-input-stream (resource-data res))))
+               ((bytecode)
+                (setf (rm-script-stream rm)
+                      (flexi-streams:make-in-memory-input-stream (resource-data res))))
                ((palette)
-                ;;(break)
                 (setf (rm-palette rm) (resource-data res))))))
 
 (defun rm-setup-part (rm part-id &optional (memlist-parts *memlist-parts*))
